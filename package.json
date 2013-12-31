@@ -14,12 +14,13 @@
     },
     "dependencies": {
         "nopt": "*",
-        "nommon": "0.0.23",
-        "parse-tools": "0.0.17"
+        "nommon": "git://github.com/maksimr/nommon.git",
+        "parse-tools": "git://github.com/maksimr/parse-tools.git"
     },
     "devDependencies": {
         "mocha": "~1.8",
         "mocks": "~0.0.10",
+        "mockery": "~1.4.0",
         "chai-as-promised": "~3.2",
         "sinon": "~1.6",
         "sinon-chai": "~2.3",
@@ -44,6 +45,9 @@
     "license": {
         "type": "MIT",
         "url": "https://github.com/pasaran/yate/raw/master/LICENSE"
+    },
+    "browserify": {
+        "transform": ["brfs"]
     }
 }
 
