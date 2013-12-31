@@ -11,7 +11,7 @@ module.exports = function(grunt) {
         browserify: {
             client: {
                 files: {
-                    'client/yate.js': ['lib/actions.js']
+                    'client/yate.js': ['lib/yate-browser.js']
                 }
             }
         },
