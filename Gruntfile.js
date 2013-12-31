@@ -11,7 +11,7 @@ module.exports = function(grunt) {
         browserify: {
             client: {
                 files: {
-                    'static/karma.js': ['client/main.js']
+                    'client/yate.js': ['lib/actions.js']
                 }
             }
         },

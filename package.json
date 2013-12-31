@@ -15,7 +15,8 @@
     "dependencies": {
         "nopt": "*",
         "nommon": "git://github.com/maksimr/nommon.git",
-        "parse-tools": "git://github.com/maksimr/parse-tools.git"
+        "parse-tools": "git://github.com/maksimr/parse-tools.git",
+        "brfs": "0.0.8"
     },
     "devDependencies": {
         "mocha": "~1.8",
@@ -47,7 +48,8 @@
         "url": "https://github.com/pasaran/yate/raw/master/LICENSE"
     },
     "browserify": {
-        "transform": ["brfs"]
+        "transform": [
+            "brfs"
+        ]
     }
 }
-
