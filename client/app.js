@@ -1,5 +1,5 @@
 (function(global) {
-    /*global angular, yr, yate*/
+    /*global angular*/
     var yateApp = angular.module('yate', []);
 
     (function(global) {
@@ -32,13 +32,18 @@
 
     yateApp.value('textareaNode', $('#repl_source'));
 
+    yateApp.value('yate', global.yate);
+
+    yateApp.value('yateRuntime', global.yr);
+
     /**
      * @desc Main controller of application
      */
-    yateApp.controller('MainController', function($scope, $timeout, Logger, textareaNode) {
+    yateApp.controller('MainController', function($scope, $timeout, Logger, textareaNode, yate, yateRuntime) {
         var logger = new Logger('repl');
 
         $scope.repl_source = textareaNode.val();
+        $scope.version = yate.version;
 
         /**
          * @desc Compile yate template
@@ -59,7 +64,7 @@
                 compiled = yate.compile(source); // compile yate template
                 (1 && eval)(compiled.js); // Eval compiled template
                 logger.log('compiled', compiled);
-                $scope.repl_results = yr.run(compiled.ast.p.Name, global); // Convert yate template to html
+                $scope.repl_results = yateRuntime.run(compiled.ast.p.Name, global); // Convert yate template to html
                 $scope.repl_status = 'success';
             } catch (replError) {
                 logger.error(replError.stack);
