@@ -1,29 +1,30 @@
-(function() {
+(function(global) {
     /*global angular, yr, yate*/
-    var yateModule = angular.module('yate', []);
+    var yateApp = angular.module('yate', []);
 
-    yateModule.controller('Sandbox', function($scope) {
-        $scope.scope = JSON.stringify({
-            "username": "Unicorn"
-        });
-        $scope.template = "module 'hello'\n\nmatch / {\n    'Hello {.username}'\n}";
+    /**
+     * @desc Main controller of application
+     */
+    yateApp.controller('MainController', function($scope) {
+        $scope.repl = function(source) {
+            var compiled;
 
-        $scope.compileYateTemplate = function(template) {
-            var result;
-
-            $scope.yateStackTrace = '';
+            // If nothing to compile then
+            // not call yate.compile
+            if (!source) {
+                return;
+            }
 
             try {
-                result = yate.compile(template);
-
-                (1 && eval)(result.js);
-
-                $scope.result = yr.run(result.ast.p.Name, (1 && Function)('return ' + $scope.scope + ';')());
-            } catch (e) {
-                $scope.yateStackTrace = e.stack;
+                compiled = yate.compile(source); // compile yate template
+                (1 && eval)(compiled.js); // Eval compiled template
+                $scope.repl_results = yr.run(compiled.ast.p.Name, global); // Convert yate template to html
+                $scope.repl_status = 'success';
+            } catch (replError) {
+                console.error(replError.stack);
+                $scope.repl_status = 'error';
+                $scope.repl_results = replError.stack;
             }
         };
     });
-
-    return yateModule;
 }(this));
