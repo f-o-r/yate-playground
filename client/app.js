@@ -38,6 +38,8 @@
     yateApp.controller('MainController', function($scope, $timeout, Logger, textareaNode) {
         var logger = new Logger('repl');
 
+        $scope.repl_source = textareaNode.val();
+
         /**
          * @desc Compile yate template
          * to html

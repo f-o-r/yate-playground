@@ -26,11 +26,14 @@
                         ng-keydown="repl(repl_source)"
                         ng-change="repl(repl_source)"
                         ng-model="repl_source" >
-                        module 'hello'
+module "hello"
 
-                        match / {
-                            "Hello {.navigator.appName}"
-                        }
+/**
+ * In the context passed the global object (window)
+ */
+match / {
+    "Hello {.navigator.appName}"
+}
                     </textarea>
                 </div>
 
