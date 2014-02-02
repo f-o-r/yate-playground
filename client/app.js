@@ -18,12 +18,16 @@
     /**
      * @desc Logger
      */
-    yateApp.factory('Logger', function() {
+    yateApp.factory('Logger', function($location) {
         var Logger = function(namespace) {
             this.namespace = namespace;
 
             ['log', 'error', 'info'].forEach(function(method) {
-                this[method] = console[method].bind(console, this.namespace + ":");
+                this[method] = function() {
+                    if ($location.search().debug) {
+                        console[method].apply(console, arguments);
+                    }
+                }.bind(this, this.namespace + ":");
             }.bind(this));
         };
 
