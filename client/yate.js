@@ -41,7 +41,7 @@ yate.compile = function(filename) {
 
     //  Парсим
     //  ------
-
+    console.log('DEBUG');
     /// console.time('parse');
     var ast = yate.parse(filename);
     /// console.timeEnd('parse');
