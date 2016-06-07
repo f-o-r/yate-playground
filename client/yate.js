@@ -19,7 +19,6 @@ require('./grammar.js');
 
 
 yate.parse = function(filename) {
-    console.log('debug 1');
     var parser = new pt.Parser(yate.grammar, yate.factory);
     var ast;
 
