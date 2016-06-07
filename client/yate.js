@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var fs_ = require('fs');
 var vm_ = require('vm');
 
@@ -161,7 +161,7 @@ yate.compile = function(filename) {
 yate.run = function(yate_cotent, data, ext_content, mode) {
 
     // Читаем runtime.
-    var js = "//  ---------------------------------------------------------------------------------------------------------------  //\n//  yate runtime\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar yr = {};\n\n(function() {\n\nyr.log = function() {};\n\n//  TODO:\n//  Пустой массив. Можно использовать везде, где предполается,\n//  что он read-only. Например, когда из select() возвращается пустой нодесет и т.д.\n//  var emptyA = [];\n\nvar modules = {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Кешируем регулярки для лучшей производительности.\n//  (http://jsperf.com/entityify-test/2)\n//\nvar RE_AMP = /&/g;\nvar RE_LT = /</g;\nvar RE_GT = />/g;\nvar RE_QUOTE = /\"/g;\n\nvar RE_E_AMP = /&amp;/g;\nvar RE_E_LT = /&lt;/g;\nvar RE_E_GT = /&gt;/g;\n\nyr.text2xml = function(s) {\n    if (s == null) { return ''; }\n\n    //  NOTE: Странное поведение Safari в этом месте.\n    //  Иногда сюда попадает объект, которые != null, но при этом у него\n    //  нет метода toString. По идее, такого быть просто не может.\n    //  Попытки пронаблюдать этот объект (при помощи console.log и т.д.)\n    //  приводят к тому, что он \"нормализуется\" и баг пропадает.\n    //  Вообще, любые операции, которые неявно приводят его к строке, например,\n    //  тоже приводят к нормализации и пропаданию бага.\n    //\n    //  Поэтому, вместо `s.toString()` используем `('' + s)`.\n    //\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2text = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_E_LT, '<')\n        .replace(RE_E_GT, '>')\n        .replace(RE_E_AMP, '&');\n};\n\nyr.text2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.register = function(id, module) {\n    if ( modules[id] ) {\n        throw Error('Module \"' + id + '\" already exists');\n    }\n\n    //  Резолвим ссылки на импортируемые модули.\n\n    var ids = module.imports || [];\n    /// module.id = id;\n    //  Для удобства добавляем в imports сам модуль.\n    var imports = [ module ];\n    for (var i = 0, l = ids.length; i < l; i++) {\n        var module_ = modules[ ids[i] ];\n        if (!module_) {\n            throw Error('Module \"' + ids[i] + '\" doesn\\'t exist');\n        } else {\n            imports = imports.concat(module_.imports);\n        }\n    }\n    //  В результате мы дерево импортов превратили в плоский список.\n    module.imports = imports;\n\n    modules[id] = module;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.run = function(id, data, mode) {\n    mode = mode || '';\n\n    var module = modules[id];\n    if (!module) {\n        throw 'Module \"' + id + '\" is undefined';\n    }\n\n    var doc = new Doc(data);\n\n    var r = module.a(module, [ doc.root ], mode, { a: {} } );\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.join = function join(left, right) {\n    return left.concat(right);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeValue = function nodeValue(node) {\n    var data = node.data;\n    return (typeof data === 'object') ? '': data;\n};\n\nyr.nodeName = function nodeName(nodeset) {\n    var node = nodeset[0];\n\n    return (node) ? node.name : '';\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.simpleScalar = function simpleScalar(name, context) {\n    var data = context.data;\n    if (!data) { return ''; }\n\n    if (name === '*') {\n        for (var key in data) {\n            return yr.simpleScalar(key, context);\n        }\n        return '';\n    }\n\n    var r = data[name];\n\n    if (typeof r === 'object') {\n        return '';\n    }\n\n    return (r === undefined) ? '' : r;\n};\n\nyr.simpleBoolean = function simpleBoolean(name, context) {\n    var data = context.data;\n    if (!data) { return false; }\n\n    if (name === '*') {\n        for (var key in data) {\n            var r = yr.simpleBoolean(key, context);\n            if (r) { return true; }\n        }\n        return false;\n    }\n\n    var r = data[name];\n\n    if (!r) { return false; }\n\n    if (r instanceof Array) {\n        return r.length;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2scalar = function nodeset2scalar(nodeset) {\n    if (!nodeset.length) { return ''; }\n\n    var data = nodeset[0].data;\n    return (typeof data == 'object') ? '': data;\n};\n\nyr.nodeset2boolean = function nodeset2boolean(nodeset) {\n    if (! (nodeset && nodeset.length > 0) ) {\n        return false;\n    }\n\n    return !!nodeset[0].data;\n};\n\nyr.nodeset2xml = function nodeset2xml(nodeset) {\n    return yr.scalar2xml( yr.nodeset2scalar(nodeset) );\n};\n\nyr.nodeset2attrvalue = function nodeset2attrvalue(nodeset) {\n    return yr.scalar2attrvalue( yr.nodeset2scalar(nodeset) );\n};\n\nyr.scalar2xml = yr.text2xml;\nyr.xml2scalar = yr.xml2text;\n\n//  FIXME: Откуда вообще взялась идея, что xml в атрибуты нужно кастить не так, как скаляры?!\n//  Смотри #157. Не нужно квотить амперсанд, потому что он уже заквочен.\nyr.xml2attrvalue = yr.xml2attr;\n\nyr.scalar2attrvalue = yr.text2attr;\n\nyr.object2nodeset = function object2nodeset(object) {\n    return [ ( new Doc(object) ).root ];\n};\n\nyr.array2nodeset = function array2nodeset(array) {\n    var object = {\n        'item': array\n    };\n    return [ ( new Doc(object) ).root ];\n};\n\n//  Сравниваем скаляр left с нодесетом right.\nyr.cmpSN = function cmpSN(left, right) {\n    for (var i = 0, l = right.length; i < l; i++) {\n        if ( left == yr.nodeValue( right[i] ) ) {\n            return true;\n        }\n    }\n    return false;\n};\n\n//  Сравниваем два нодесета.\nyr.cmpNN = function cmpNN(left, right) {\n    var m = right.length;\n\n    if (m === 0) { return false; }\n    if (m === 1) { return yr.cmpSN( yr.nodeValue( right[0] ), left ); }\n\n    var values = [];\n\n    var rv = yr.nodeValue( right[0] );\n    for (var i = 0, l = left.length; i < l; i++) {\n        var lv = yr.nodeValue( left[i] );\n        if (lv == rv) { return true; }\n        values[i] = lv;\n    }\n\n    for (var j = 1; j < m; j++) {\n        rv = yr.nodeValue( right[j] );\n        for (var i = 0, l = left.length; i < l; i++) {\n            if ( values[i] == rv ) { return true; }\n        }\n    }\n\n    return false;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.shortTags = {\n    br: true,\n    col: true,\n    embed: true,\n    hr: true,\n    img: true,\n    input: true,\n    link: true,\n    meta: true,\n    param: true,\n    wbr: true\n};\n\nyr.closeAttrs = function closeAttrs(a) {\n    var name = a.s;\n\n    if (name) {\n        var r = '';\n        var attrs = a.a;\n\n        for (var attr in attrs) {\n            r += ' ' + attr + '=\"' + attrs[attr].quote() + '\"';\n        }\n        /*\n        for (var attr in attrs) {\n            if ( attrs.hasOwnProperty(attr) ) {\n                var v = attrs[attr];\n                if (v.quote) {\n                    r += ' ' + attr + '=\"' + v.quote() + '\"';\n                } else {\n                    yr.log({\n                        id: 'NO_QUOTE',\n                        message: \"Attr doesn't have quote() method\",\n                        data: {\n                            key: attr,\n                            value: v\n                        }\n                    });\n                }\n            } else {\n                yr.log({\n                    id: 'BAD_PROTOTYPE',\n                    message: 'Object prototype is corrupted',\n                    data: {\n                        key: attr,\n                        value: v\n                    }\n                });\n            }\n        }\n        */\n        r += (yr.shortTags[name]) ? '/>' : '>';\n        a.s = null;\n\n        return r;\n    }\n\n    return '';\n};\n\nyr.copyAttrs = function copyAttrs(to, from) {\n    for (var key in from) {\n        to[key] = from[key];\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.scalarAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.scalarAttr.prototype.quote = function() {\n    return yr.text2attr(this.s);\n};\n\nfunction quoteAmp(s) {\n    return s.replace(/&/g, '&amp;');\n}\n\nyr.scalarAttr.prototype.addxml = function(xml) {\n    return new yr.xmlAttr( quoteAmp(this.s) + xml );\n};\n\nyr.scalarAttr.prototype.addscalar = function(xml) {\n    return new yr.scalarAttr( this.s + xml );\n};\n\nyr.xmlAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.xmlAttr.prototype.quote = function() {\n    return yr.xml2attr(this.s);\n};\n\nyr.xmlAttr.prototype.addscalar = function(scalar) {\n    return new yr.xmlAttr( this.s + quoteAmp(scalar) );\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.slice = function(s, from, to) {\n    //  NOTE: См. коммент про Safari выше.\n\n    s = '' + s;\n    return (to) ? s.slice(from, to) : s.slice(from);\n};\n\nyr.exists = function(nodeset) {\n    return nodeset.length > 0;\n};\n\nyr.grep = function(nodeset, predicate) {\n    var r = [];\n    for (var index = 0, count = nodeset.length; index < count; index++) {\n        var node = nodeset[index];\n        if (predicate(node, index, count)) {\n            r.push(node);\n        }\n    }\n    return r;\n};\n\nyr.byIndex = function(nodeset, i) {\n    return nodeset.slice(i, i + 1);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.sort = function(nodes, by, desc) {\n    var values = [];\n    for (var i = 0, l = nodes.length; i < l; i++) {\n        var node = nodes[i];\n        var value = by(node, i, l);\n        values.push({\n            node: node,\n            value: value\n        });\n    }\n\n    var greater = (desc) ? -1 : +1;\n    var less = (desc) ? +1 : -1;\n\n    var sorted = values.sort(function(a, b) {\n        var va = a.value;\n        var vb = b.value;\n        if (va < vb) { return less; }\n        if (va > vb) { return greater; }\n        return 0;\n    });\n\n    var r = [];\n    for (var i = 0, l = sorted.length; i < l; i++) {\n        r.push( sorted[i].node );\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2data = function(nodes) {\n    var l = nodes.length;\n    if (l === 0) {\n        return '';\n    }\n\n    if (l === 1) {\n        return nodes[0].data;\n    }\n\n    var data = [];\n    for (var i = 0; i < l; i++) {\n        data.push( nodes[i].data );\n    }\n\n    return data;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.externals = {};\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  Module\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\nvar Module = function() {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex applyValue.\nModule.prototype.a = function applyValue(M, nodeset, mode, a0) {\n    var r = '';\n\n    //  Достаем аргументы, переданные в apply, если они там есть.\n    var args;\n    if (arguments.length > 4) {\n        args = Array.prototype.slice.call(arguments, 4);\n    }\n\n    var imports = M.imports;\n\n    //  Идем по нодесету.\n    for (var i0 = 0, l0 = nodeset.length; i0 < l0; i0++) {\n        var c0 = nodeset[i0];\n\n        //  Для каждой ноды ищем подходящий шаблон.\n        //  Сперва ищем в текущем модуле ( imports[0] ),\n        //  затем идем далее по списку импортов.\n\n        //  Если мы найдем шаблон, в found будет его id, а в module -- модуль,\n        //  в котором находится этот шаблон.\n        var found = false;\n        var module;\n\n        var i2 = 0;\n        var l2 = imports.length;\n        var template;\n        while (!found && i2 < l2) {\n            module = imports[i2++];\n\n            //  matcher представляем собой двухуровневый объект,\n            //  на первом уровне ключами являются моды,\n            //  на втором -- имена нод.\n            //  Значения на втором уровне -- список id-шников шаблонов.\n            var names = module.matcher[mode];\n\n            if (names) {\n                //  FIXME: Тут неправильно. Если шаблоны для c0.name будут,\n                //  но ни один из них не подойдет, то шаблоны для '*' не применятся вообще.\n                //  FIXME: Плюс шаблоны на '*' всегда имеют более низкий приоритет.\n                var templates = names[c0.name] || names['*'];\n                if (templates) {\n                    var i3 = 0;\n                    var l3 = templates.length;\n                    while (!found && i3 < l3) {\n                        var tid = templates[i3++];\n                        template = module[tid];\n\n                        var selector = template.j;\n                        if (selector) {\n                            //  В template.j лежит id селектора (jpath'а).\n                            //  В tempalte.a флаг о том, является ли jpath абсолютным.\n                            if ( module.matched(selector, template.a, c0, i0, l0) ) {\n                                found = tid;\n                            }\n                        } else {\n                            var selectors = template.s;\n                            var abs = template.a;\n                            //  В template.s лежит массив с id-шниками селекторов.\n                            for (var i4 = 0, l4 = selectors.length; i4 < l4; i4++) {\n                                if ( module.matched(selectors[i4], abs[i4], c0, i0, l0) ) {\n                                    found = tid;\n                                    break;\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n\n        if (found) {\n            //  Шаблон нашли, применяем его.\n            if (args) {\n                //  Шаблон позвали с параметрами, приходится изгаляться.\n                r += template.apply( M, [M, c0, i0, l0, a0].concat(args) );\n            } else {\n                r += template(M, c0, i0, l0, a0);\n            }\n        }\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.matched = function matched(jpath, abs, c0, i0, l0) {\n    if (jpath === 1) {\n        //  Это jpath '/'\n        return !c0.parent;\n    }\n\n    var l = jpath.length;\n    //  i (и l) всегда будет четное.\n    var i = l - 2;\n    while (i >= 0) {\n        if (!c0) { return false; }\n\n        var step = jpath[i];\n        //  Тут step может быть либо 0 (nametest), либо 2 (predicate).\n        //  Варианты 1 (dots) и 3 (index) в jpath'ах в селекторах запрещены.\n        switch (step) {\n            case 0:\n                //  Nametest.\n                var name = jpath[i + 1];\n                if (name !== '*' && name !== c0.name) { return false; }\n                c0 = c0.parent;\n                break;\n\n            case 2:\n            case 4:\n                //  Predicate or guard.\n                var predicate = jpath[i + 1];\n                if ( !predicate(this, c0, i0, l0) ) { return false; }\n                break;\n        }\n\n        i -= 2;\n    }\n\n    if (abs && c0.parent) {\n        return false;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex selectN.\nModule.prototype.s = function selectN(jpath, node) {\n    return this.n( jpath, [ node ] );\n};\n\n//  NOTE: ex selectNs.\nModule.prototype.n = function selectNs(jpath, nodeset) {\n\n    var current = nodeset;\n    var m = current.length;\n\n    var result;\n    for (var i = 0, n = jpath.length; i < n; i += 2) {\n        result = [];\n\n        var type = jpath[i];\n        var step = jpath[i + 1];\n\n        switch (type) {\n\n            case 0: // Это nametest (.foo или .*), в step 'foo' или '*'.\n                for (var j = 0; j < m; j++) {\n                    yr.selectNametest(step, current[j], result);\n                }\n                break;\n\n            case 1: // Это dots (., .., ...), в step количество шагов минус один ( . -- 0, .. -- 1, ... -- 2 и т.д. ).\n                for (var j = 0; j < m; j++) {\n                    var k = 0;\n                    var node = current[j];\n                    while (k < step && node) {\n                        node = node.parent;\n                        k++;\n                    }\n                    if (node) {\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 2: // Это filter, в step предикат.\n                for (var j = 0; j < m; j++) {\n                    var node = current[j];\n                    if (step(this, node, j, m)) { // Предикат принимает четыре параметра: module, node, index и count.\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 3: // Это index, в step индекс нужного элемента.\n                var node = current[ step ];\n                result = (node) ? [ node ] : [];\n                break;\n\n            case 4:\n                //  Это глобальный гвард.\n                if (m > 0) {\n                    var node = current[0];\n                    if ( step(this, node.doc.root, 0, 1) ) {\n                        result = result.concat(current);\n                    }\n                }\n\n        }\n\n        current = result;\n        m = current.length;\n\n        if (!m) { return []; }\n    }\n\n    return result;\n};\n\nyr.selectNametest = function selectNametest(step, context, result) {\n\n    var data = context.data;\n\n    if (!data || typeof data !== 'object') { return result; }\n\n    if (step === '*') {\n        if (data instanceof Array) {\n            for (var i = 0, l = data.length; i < l; i++) {\n                yr.selectNametest(i, context, result);\n            }\n        } else {\n            for (step in data) {\n                yr.selectNametest(step, context, result);\n            }\n        }\n        return result;\n    }\n\n    data = data[step];\n    if (data === undefined) { return result; }\n\n    var doc = context.doc;\n    if (data instanceof Array) {\n        for (var i = 0, l = data.length; i < l; i++) {\n            result.push({\n                data: data[i],\n                parent: context,\n                name: step,\n                //  FIXME: Не нравится мне этот doc.\n                doc: doc\n            });\n        }\n    } else {\n        result.push({\n            data: data,\n            parent: context,\n            name: step,\n            //  FIXME: Не нравится мне этот doc.\n            doc: doc\n        });\n    }\n\n    return result;\n};\n\nyr.document = function(nodeset) {\n    var doc;\n    if (!nodeset.length) {\n        doc = new Doc( {} );\n    } else {\n        doc = new Doc( nodeset[0].data );\n    }\n    return [ doc.root ];\n};\n\nyr.subnode = function(name, data, context) {\n    var doc = context.doc;\n\n    if (data instanceof Array) {\n        var nodeset = [];\n        for (var i = 0, l = data.length; i < l; i++) {\n            nodeset.push({\n                data: data[i],\n                name: name,\n                parent: context,\n                doc: doc\n            });\n        }\n        return nodeset;\n    }\n\n    return [\n        {\n            data: data,\n            name: name,\n            parent: context,\n            doc: doc\n        }\n    ];\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Глобальные переменные у нас \"ленивые\" с кэшированием.\n//  В this[name] находится только лишь функция,\n//  вычисляющая нужное значение.\n//\n//  NOTE: ex vars\nModule.prototype.v = function vars(id, c0) {\n    var vars = c0.doc._vars;\n    var value = vars[id];\n    if (value === undefined) {\n        var var_ = this.findSymbol(id);\n        value = (typeof var_ === 'function') ? var_(this, c0, 0, 1) : var_;\n        vars[id] = value;\n    }\n    return value;\n};\n\n//  FIXME: Тут еще бывает a0, а иногда не бывает.\n//\n//  NOTE: ex funcs\nModule.prototype.f = function funcs(id, c0, i0, l0, v0) {\n    var func = this.findSymbol(id);\n\n    if (arguments.length > 5) {\n        //  Два и более аргументов.\n        var args = Array.prototype.slice.call(arguments);\n        args[0] = this;\n        return func.apply(this, args);\n    }\n\n    if (v0 !== undefined) {\n        //  Один аргумент.\n        return func(this, c0, i0, l0, v0);\n    }\n\n    //  Без аргументов.\n    return func(this, c0, i0, l0);\n};\n\n//  NOTE: ex keys.\nModule.prototype.k = function keys(id, use, c0, multiple) {\n    var keys = c0.doc._keys;\n\n    var key = this.findSymbol(id);\n\n    var cache = keys[id];\n    if (!cache) {\n        cache = this._initKey(key, id, use, c0);\n    }\n\n    var values = cache.values;\n    var nodes = cache.nodes;\n\n    var that = this;\n\n    if (multiple) {\n        //  В use -- нодесет.\n        var r;\n\n        if (cache.xml) {\n            r = '';\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r += getValue( yr.nodeValue(c0) );\n            }\n        } else {\n            r = [];\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r = r.concat( getValue( yr.nodeValue(c0) ) );\n            }\n        }\n\n        return r;\n\n    } else {\n        //  В use -- скаляр.\n        var value = values[use];\n        if (value === undefined) {\n            value = getValue(use);\n        }\n\n        return value;\n\n    }\n\n    function getValue(use) {\n        var nodes_ = nodes[use];\n\n        var r;\n        if (cache.xml) {\n            r = '';\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    //  FIXME: Нельзя ли тут последний параметр сделать общим,\n                    //  а не создавать его для каждого элемента цикла?\n                    r += key.b( that, node.c, node.i, node.l, {} );\n                }\n            }\n        } else {\n            r = [];\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    r = r.concat( key.b(that, node.c, node.i, node.l) );\n                }\n            }\n        }\n\n        values[use] = r;\n\n        return r;\n    }\n\n};\n\nModule.prototype._initKey = function(key, id, use, c0) {\n    var keys = c0.doc._keys;\n    var cache = keys[id] = {};\n\n    //  Тело ключ имеет тип xml.\n    cache.xml = (key.bt === 'xml');\n\n    //  Вычисляем нодесет с нодами, которые матчатся ключом.\n    var matched = key.n(this, c0);\n    //  Хранилище для этих нод.\n    var nodes = cache.nodes = {};\n\n    //  Значение use ключа может возвращать нодесет или скаляр.\n    if (key.ut === 'nodeset') {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            for (var j = 0, m = use_.length; j < m; j++) {\n                store( yr.nodeValue( use_[j] ), { c: c1, i: i0, l: l0 } );\n            }\n        }\n\n    } else {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            store( use_, { c: c1, i: i0, l: l0 } );\n        }\n\n    }\n\n    //  Хранилище для уже вычисленных значений ключа.\n    cache.values = {};\n\n    return cache;\n\n    //  Сохраняем ноду по соответствующему ключу.\n    //  Одному ключу может соответствовать несколько нод.\n    function store(key, info) {\n        var items = nodes[key];\n        if (!items) {\n            items = nodes[key] = [];\n        }\n        items.push(info);\n    }\n\n\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.findSymbol = function(id) {\n    var imports = this.imports;\n    for (var i = 0, l = imports.length; i < l; i++) {\n        var module = imports[i];\n        var symbol = module[id];\n        if (symbol !== undefined) { return symbol; }\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nfunction Doc(data) {\n    //  FIXME: Что тут использовать? Array.isArray?\n    if (data instanceof Array) {\n        data = {\n            //  FIXME: Сделать название поля ('item') настраеваемым.\n            'item': data\n        };\n    }\n\n    this.root = {\n        data: data,\n        parent: null,\n        name: '',\n        doc: this\n    };\n\n    this._vars = {};\n    this._keys = {};\n}\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\n\nyr.Module = Module;\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n})();\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: Для использования из node.js.\n//  При этом недостаточно просто проверить window/document.\n//  Потому что в тестах runtime грузится не как модуль (пока что, надеюсь),\n//  но просто эвалится, поэтому в нем module не определен.\n//\nif (typeof module === 'object' && module.exports) {\n    module.exports = yr;\n}\n\n";
+    var js = "//  ---------------------------------------------------------------------------------------------------------------  //\n//  yate runtime\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar yr = {};\n\n(function() {\n\nyr.log = function() {};\n\n//  TODO:\n//  Пустой массив. Можно использовать везде, где предполается,\n//  что он read-only. Например, когда из select() возвращается пустой нодесет и т.д.\n//  var emptyA = [];\n\nvar modules = {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Кешируем регулярки для лучшей производительности.\n//  (http://jsperf.com/entityify-test/2)\n//\nvar RE_AMP = /&/g;\nvar RE_LT = /</g;\nvar RE_GT = />/g;\nvar RE_QUOTE = /\"/g;\n\nvar RE_E_AMP = /&amp;/g;\nvar RE_E_LT = /&lt;/g;\nvar RE_E_GT = /&gt;/g;\n\nyr.text2xml = function(s) {\n    if (s == null) { return ''; }\n\n    //  NOTE: Странное поведение Safari в этом месте.\n    //  Иногда сюда попадает объект, которые != null, но при этом у него\n    //  нет метода toString. По идее, такого быть просто не может.\n    //  Попытки пронаблюдать этот объект (при помощи console.log и т.д.)\n    //  приводят к тому, что он \"нормализуется\" и баг пропадает.\n    //  Вообще, любые операции, которые неявно приводят его к строке, например,\n    //  тоже приводят к нормализации и пропаданию бага.\n    //\n    //  Поэтому, вместо `s.toString()` используем `('' + s)`.\n    //\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2text = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_E_LT, '<')\n        .replace(RE_E_GT, '>')\n        .replace(RE_E_AMP, '&');\n};\n\nyr.text2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.register = function(id, module) {\n    //  Резолвим ссылки на импортируемые модули.\n\n    var ids = module.imports || [];\n    /// module.id = id;\n    //  Для удобства добавляем в imports сам модуль.\n    var imports = [ module ];\n    for (var i = 0, l = ids.length; i < l; i++) {\n        var module_ = modules[ ids[i] ];\n        if (!module_) {\n            throw Error('Module \"' + ids[i] + '\" doesn\\'t exist');\n        } else {\n            imports = imports.concat(module_.imports);\n        }\n    }\n    //  В результате мы дерево импортов превратили в плоский список.\n    module.imports = imports;\n\n    modules[id] = module;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.run = function(id, data, mode) {\n    mode = mode || '';\n\n    var module = modules[id];\n    if (!module) {\n        throw 'Module \"' + id + '\" is undefined';\n    }\n\n    var doc = new Doc(data);\n\n    var r = module.a(module, [ doc.root ], mode, { a: {} } );\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.join = function join(left, right) {\n    return left.concat(right);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeValue = function nodeValue(node) {\n    var data = node.data;\n    return (typeof data === 'object') ? '': data;\n};\n\nyr.nodeName = function nodeName(nodeset) {\n    var node = nodeset[0];\n\n    return (node) ? node.name : '';\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.simpleScalar = function simpleScalar(name, context) {\n    var data = context.data;\n    if (!data) { return ''; }\n\n    if (name === '*') {\n        for (var key in data) {\n            return yr.simpleScalar(key, context);\n        }\n        return '';\n    }\n\n    var r = data[name];\n\n    if (typeof r === 'object') {\n        return '';\n    }\n\n    return (r === undefined) ? '' : r;\n};\n\nyr.simpleBoolean = function simpleBoolean(name, context) {\n    var data = context.data;\n    if (!data) { return false; }\n\n    if (name === '*') {\n        for (var key in data) {\n            var r = yr.simpleBoolean(key, context);\n            if (r) { return true; }\n        }\n        return false;\n    }\n\n    var r = data[name];\n\n    if (!r) { return false; }\n\n    if (r instanceof Array) {\n        return r.length;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2scalar = function nodeset2scalar(nodeset) {\n    if (!nodeset.length) { return ''; }\n\n    var data = nodeset[0].data;\n    return (typeof data == 'object') ? '': data;\n};\n\nyr.nodeset2boolean = function nodeset2boolean(nodeset) {\n    if (! (nodeset && nodeset.length > 0) ) {\n        return false;\n    }\n\n    return !!nodeset[0].data;\n};\n\nyr.nodeset2xml = function nodeset2xml(nodeset) {\n    return yr.scalar2xml( yr.nodeset2scalar(nodeset) );\n};\n\nyr.nodeset2attrvalue = function nodeset2attrvalue(nodeset) {\n    return yr.scalar2attrvalue( yr.nodeset2scalar(nodeset) );\n};\n\nyr.scalar2xml = yr.text2xml;\nyr.xml2scalar = yr.xml2text;\n\n//  FIXME: Откуда вообще взялась идея, что xml в атрибуты нужно кастить не так, как скаляры?!\n//  Смотри #157. Не нужно квотить амперсанд, потому что он уже заквочен.\nyr.xml2attrvalue = yr.xml2attr;\n\nyr.scalar2attrvalue = yr.text2attr;\n\nyr.object2nodeset = function object2nodeset(object) {\n    return [ ( new Doc(object) ).root ];\n};\n\nyr.array2nodeset = function array2nodeset(array) {\n    var object = {\n        'item': array\n    };\n    return [ ( new Doc(object) ).root ];\n};\n\n//  Сравниваем скаляр left с нодесетом right.\nyr.cmpSN = function cmpSN(left, right) {\n    for (var i = 0, l = right.length; i < l; i++) {\n        if ( left == yr.nodeValue( right[i] ) ) {\n            return true;\n        }\n    }\n    return false;\n};\n\n//  Сравниваем два нодесета.\nyr.cmpNN = function cmpNN(left, right) {\n    var m = right.length;\n\n    if (m === 0) { return false; }\n    if (m === 1) { return yr.cmpSN( yr.nodeValue( right[0] ), left ); }\n\n    var values = [];\n\n    var rv = yr.nodeValue( right[0] );\n    for (var i = 0, l = left.length; i < l; i++) {\n        var lv = yr.nodeValue( left[i] );\n        if (lv == rv) { return true; }\n        values[i] = lv;\n    }\n\n    for (var j = 1; j < m; j++) {\n        rv = yr.nodeValue( right[j] );\n        for (var i = 0, l = left.length; i < l; i++) {\n            if ( values[i] == rv ) { return true; }\n        }\n    }\n\n    return false;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.shortTags = {\n    br: true,\n    col: true,\n    embed: true,\n    hr: true,\n    img: true,\n    input: true,\n    link: true,\n    meta: true,\n    param: true,\n    wbr: true\n};\n\nyr.closeAttrs = function closeAttrs(a) {\n    var name = a.s;\n\n    if (name) {\n        var r = '';\n        var attrs = a.a;\n\n        for (var attr in attrs) {\n            r += ' ' + attr + '=\"' + attrs[attr].quote() + '\"';\n        }\n        /*\n        for (var attr in attrs) {\n            if ( attrs.hasOwnProperty(attr) ) {\n                var v = attrs[attr];\n                if (v.quote) {\n                    r += ' ' + attr + '=\"' + v.quote() + '\"';\n                } else {\n                    yr.log({\n                        id: 'NO_QUOTE',\n                        message: \"Attr doesn't have quote() method\",\n                        data: {\n                            key: attr,\n                            value: v\n                        }\n                    });\n                }\n            } else {\n                yr.log({\n                    id: 'BAD_PROTOTYPE',\n                    message: 'Object prototype is corrupted',\n                    data: {\n                        key: attr,\n                        value: v\n                    }\n                });\n            }\n        }\n        */\n        r += (yr.shortTags[name]) ? '/>' : '>';\n        a.s = null;\n\n        return r;\n    }\n\n    return '';\n};\n\nyr.copyAttrs = function copyAttrs(to, from) {\n    for (var key in from) {\n        to[key] = from[key];\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.scalarAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.scalarAttr.prototype.quote = function() {\n    return yr.text2attr(this.s);\n};\n\nfunction quoteAmp(s) {\n    return s.replace(/&/g, '&amp;');\n}\n\nyr.scalarAttr.prototype.addxml = function(xml) {\n    return new yr.xmlAttr( quoteAmp(this.s) + xml );\n};\n\nyr.scalarAttr.prototype.addscalar = function(xml) {\n    return new yr.scalarAttr( this.s + xml );\n};\n\nyr.xmlAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.xmlAttr.prototype.quote = function() {\n    return yr.xml2attr(this.s);\n};\n\nyr.xmlAttr.prototype.addscalar = function(scalar) {\n    return new yr.xmlAttr( this.s + quoteAmp(scalar) );\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.slice = function(s, from, to) {\n    //  NOTE: См. коммент про Safari выше.\n\n    s = '' + s;\n    return (to) ? s.slice(from, to) : s.slice(from);\n};\n\nyr.exists = function(nodeset) {\n    return nodeset.length > 0;\n};\n\nyr.grep = function(nodeset, predicate) {\n    var r = [];\n    for (var index = 0, count = nodeset.length; index < count; index++) {\n        var node = nodeset[index];\n        if (predicate(node, index, count)) {\n            r.push(node);\n        }\n    }\n    return r;\n};\n\nyr.byIndex = function(nodeset, i) {\n    return nodeset.slice(i, i + 1);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.sort = function(nodes, by, desc) {\n    var values = [];\n    for (var i = 0, l = nodes.length; i < l; i++) {\n        var node = nodes[i];\n        var value = by(node, i, l);\n        values.push({\n            node: node,\n            value: value\n        });\n    }\n\n    var greater = (desc) ? -1 : +1;\n    var less = (desc) ? +1 : -1;\n\n    var sorted = values.sort(function(a, b) {\n        var va = a.value;\n        var vb = b.value;\n        if (va < vb) { return less; }\n        if (va > vb) { return greater; }\n        return 0;\n    });\n\n    var r = [];\n    for (var i = 0, l = sorted.length; i < l; i++) {\n        r.push( sorted[i].node );\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2data = function(nodes) {\n    var l = nodes.length;\n    if (l === 0) {\n        return '';\n    }\n\n    if (l === 1) {\n        return nodes[0].data;\n    }\n\n    var data = [];\n    for (var i = 0; i < l; i++) {\n        data.push( nodes[i].data );\n    }\n\n    return data;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.externals = {};\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  Module\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\nvar Module = function() {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex applyValue.\nModule.prototype.a = function applyValue(M, nodeset, mode, a0) {\n    var r = '';\n\n    //  Достаем аргументы, переданные в apply, если они там есть.\n    var args;\n    if (arguments.length > 4) {\n        args = Array.prototype.slice.call(arguments, 4);\n    }\n\n    var imports = M.imports;\n\n    //  Идем по нодесету.\n    for (var i0 = 0, l0 = nodeset.length; i0 < l0; i0++) {\n        var c0 = nodeset[i0];\n\n        //  Для каждой ноды ищем подходящий шаблон.\n        //  Сперва ищем в текущем модуле ( imports[0] ),\n        //  затем идем далее по списку импортов.\n\n        //  Если мы найдем шаблон, в found будет его id, а в module -- модуль,\n        //  в котором находится этот шаблон.\n        var found = false;\n        var module;\n\n        var i2 = 0;\n        var l2 = imports.length;\n        var template;\n        while (!found && i2 < l2) {\n            module = imports[i2++];\n\n            //  matcher представляем собой двухуровневый объект,\n            //  на первом уровне ключами являются моды,\n            //  на втором -- имена нод.\n            //  Значения на втором уровне -- список id-шников шаблонов.\n            var names = module.matcher[mode];\n\n            if (names) {\n                //  FIXME: Тут неправильно. Если шаблоны для c0.name будут,\n                //  но ни один из них не подойдет, то шаблоны для '*' не применятся вообще.\n                //  FIXME: Плюс шаблоны на '*' всегда имеют более низкий приоритет.\n                var templates = names[c0.name] || names['*'];\n                if (templates) {\n                    var i3 = 0;\n                    var l3 = templates.length;\n                    while (!found && i3 < l3) {\n                        var tid = templates[i3++];\n                        template = module[tid];\n\n                        var selector = template.j;\n                        if (selector) {\n                            //  В template.j лежит id селектора (jpath'а).\n                            //  В tempalte.a флаг о том, является ли jpath абсолютным.\n                            if ( module.matched(selector, template.a, c0, i0, l0) ) {\n                                found = tid;\n                            }\n                        } else {\n                            var selectors = template.s;\n                            var abs = template.a;\n                            //  В template.s лежит массив с id-шниками селекторов.\n                            for (var i4 = 0, l4 = selectors.length; i4 < l4; i4++) {\n                                if ( module.matched(selectors[i4], abs[i4], c0, i0, l0) ) {\n                                    found = tid;\n                                    break;\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n\n        if (found) {\n            //  Шаблон нашли, применяем его.\n            if (args) {\n                //  Шаблон позвали с параметрами, приходится изгаляться.\n                r += template.apply( M, [M, c0, i0, l0, a0].concat(args) );\n            } else {\n                r += template(M, c0, i0, l0, a0);\n            }\n        }\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.matched = function matched(jpath, abs, c0, i0, l0) {\n    if (jpath === 1) {\n        //  Это jpath '/'\n        return !c0.parent;\n    }\n\n    var l = jpath.length;\n    //  i (и l) всегда будет четное.\n    var i = l - 2;\n    while (i >= 0) {\n        if (!c0) { return false; }\n\n        var step = jpath[i];\n        //  Тут step может быть либо 0 (nametest), либо 2 (predicate).\n        //  Варианты 1 (dots) и 3 (index) в jpath'ах в селекторах запрещены.\n        switch (step) {\n            case 0:\n                //  Nametest.\n                var name = jpath[i + 1];\n                if (name !== '*' && name !== c0.name) { return false; }\n                c0 = c0.parent;\n                break;\n\n            case 2:\n            case 4:\n                //  Predicate or guard.\n                var predicate = jpath[i + 1];\n                if ( !predicate(this, c0, i0, l0) ) { return false; }\n                break;\n        }\n\n        i -= 2;\n    }\n\n    if (abs && c0.parent) {\n        return false;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex selectN.\nModule.prototype.s = function selectN(jpath, node) {\n    return this.n( jpath, [ node ] );\n};\n\n//  NOTE: ex selectNs.\nModule.prototype.n = function selectNs(jpath, nodeset) {\n\n    var current = nodeset;\n    var m = current.length;\n\n    var result;\n    for (var i = 0, n = jpath.length; i < n; i += 2) {\n        result = [];\n\n        var type = jpath[i];\n        var step = jpath[i + 1];\n\n        switch (type) {\n\n            case 0: // Это nametest (.foo или .*), в step 'foo' или '*'.\n                for (var j = 0; j < m; j++) {\n                    yr.selectNametest(step, current[j], result);\n                }\n                break;\n\n            case 1: // Это dots (., .., ...), в step количество шагов минус один ( . -- 0, .. -- 1, ... -- 2 и т.д. ).\n                for (var j = 0; j < m; j++) {\n                    var k = 0;\n                    var node = current[j];\n                    while (k < step && node) {\n                        node = node.parent;\n                        k++;\n                    }\n                    if (node) {\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 2: // Это filter, в step предикат.\n                for (var j = 0; j < m; j++) {\n                    var node = current[j];\n                    if (step(this, node, j, m)) { // Предикат принимает четыре параметра: module, node, index и count.\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 3: // Это index, в step индекс нужного элемента.\n                var node = current[ step ];\n                result = (node) ? [ node ] : [];\n                break;\n\n            case 4:\n                //  Это глобальный гвард.\n                if (m > 0) {\n                    var node = current[0];\n                    if ( step(this, node.doc.root, 0, 1) ) {\n                        result = result.concat(current);\n                    }\n                }\n\n        }\n\n        current = result;\n        m = current.length;\n\n        if (!m) { return []; }\n    }\n\n    return result;\n};\n\nyr.selectNametest = function selectNametest(step, context, result) {\n\n    var data = context.data;\n\n    if (!data || typeof data !== 'object') { return result; }\n\n    if (step === '*') {\n        if (data instanceof Array) {\n            for (var i = 0, l = data.length; i < l; i++) {\n                yr.selectNametest(i, context, result);\n            }\n        } else {\n            for (step in data) {\n                yr.selectNametest(step, context, result);\n            }\n        }\n        return result;\n    }\n\n    data = data[step];\n    if (data === undefined) { return result; }\n\n    var doc = context.doc;\n    if (data instanceof Array) {\n        for (var i = 0, l = data.length; i < l; i++) {\n            result.push({\n                data: data[i],\n                parent: context,\n                name: step,\n                //  FIXME: Не нравится мне этот doc.\n                doc: doc\n            });\n        }\n    } else {\n        result.push({\n            data: data,\n            parent: context,\n            name: step,\n            //  FIXME: Не нравится мне этот doc.\n            doc: doc\n        });\n    }\n\n    return result;\n};\n\nyr.document = function(nodeset) {\n    var doc;\n    if (!nodeset.length) {\n        doc = new Doc( {} );\n    } else {\n        doc = new Doc( nodeset[0].data );\n    }\n    return [ doc.root ];\n};\n\nyr.subnode = function(name, data, context) {\n    var doc = context.doc;\n\n    if (data instanceof Array) {\n        var nodeset = [];\n        for (var i = 0, l = data.length; i < l; i++) {\n            nodeset.push({\n                data: data[i],\n                name: name,\n                parent: context,\n                doc: doc\n            });\n        }\n        return nodeset;\n    }\n\n    return [\n        {\n            data: data,\n            name: name,\n            parent: context,\n            doc: doc\n        }\n    ];\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Глобальные переменные у нас \"ленивые\" с кэшированием.\n//  В this[name] находится только лишь функция,\n//  вычисляющая нужное значение.\n//\n//  NOTE: ex vars\nModule.prototype.v = function vars(id, c0) {\n    var vars = c0.doc._vars;\n    var value = vars[id];\n    if (value === undefined) {\n        var var_ = this.findSymbol(id);\n        value = (typeof var_ === 'function') ? var_(this, c0, 0, 1) : var_;\n        vars[id] = value;\n    }\n    return value;\n};\n\n//  FIXME: Тут еще бывает a0, а иногда не бывает.\n//\n//  NOTE: ex funcs\nModule.prototype.f = function funcs(id, c0, i0, l0, v0) {\n    var func = this.findSymbol(id);\n\n    if (arguments.length > 5) {\n        //  Два и более аргументов.\n        var args = Array.prototype.slice.call(arguments);\n        args[0] = this;\n        return func.apply(this, args);\n    }\n\n    if (v0 !== undefined) {\n        //  Один аргумент.\n        return func(this, c0, i0, l0, v0);\n    }\n\n    //  Без аргументов.\n    return func(this, c0, i0, l0);\n};\n\n//  NOTE: ex keys.\nModule.prototype.k = function keys(id, use, c0, multiple) {\n    var keys = c0.doc._keys;\n\n    var key = this.findSymbol(id);\n\n    var cache = keys[id];\n    if (!cache) {\n        cache = this._initKey(key, id, use, c0);\n    }\n\n    var values = cache.values;\n    var nodes = cache.nodes;\n\n    var that = this;\n\n    if (multiple) {\n        //  В use -- нодесет.\n        var r;\n\n        if (cache.xml) {\n            r = '';\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r += getValue( yr.nodeValue(c0) );\n            }\n        } else {\n            r = [];\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r = r.concat( getValue( yr.nodeValue(c0) ) );\n            }\n        }\n\n        return r;\n\n    } else {\n        //  В use -- скаляр.\n        var value = values[use];\n        if (value === undefined) {\n            value = getValue(use);\n        }\n\n        return value;\n\n    }\n\n    function getValue(use) {\n        var nodes_ = nodes[use];\n\n        var r;\n        if (cache.xml) {\n            r = '';\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    //  FIXME: Нельзя ли тут последний параметр сделать общим,\n                    //  а не создавать его для каждого элемента цикла?\n                    r += key.b( that, node.c, node.i, node.l, {} );\n                }\n            }\n        } else {\n            r = [];\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    r = r.concat( key.b(that, node.c, node.i, node.l) );\n                }\n            }\n        }\n\n        values[use] = r;\n\n        return r;\n    }\n\n};\n\nModule.prototype._initKey = function(key, id, use, c0) {\n    var keys = c0.doc._keys;\n    var cache = keys[id] = {};\n\n    //  Тело ключ имеет тип xml.\n    cache.xml = (key.bt === 'xml');\n\n    //  Вычисляем нодесет с нодами, которые матчатся ключом.\n    var matched = key.n(this, c0);\n    //  Хранилище для этих нод.\n    var nodes = cache.nodes = {};\n\n    //  Значение use ключа может возвращать нодесет или скаляр.\n    if (key.ut === 'nodeset') {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            for (var j = 0, m = use_.length; j < m; j++) {\n                store( yr.nodeValue( use_[j] ), { c: c1, i: i0, l: l0 } );\n            }\n        }\n\n    } else {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            store( use_, { c: c1, i: i0, l: l0 } );\n        }\n\n    }\n\n    //  Хранилище для уже вычисленных значений ключа.\n    cache.values = {};\n\n    return cache;\n\n    //  Сохраняем ноду по соответствующему ключу.\n    //  Одному ключу может соответствовать несколько нод.\n    function store(key, info) {\n        var items = nodes[key];\n        if (!items) {\n            items = nodes[key] = [];\n        }\n        items.push(info);\n    }\n\n\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.findSymbol = function(id) {\n    var imports = this.imports;\n    for (var i = 0, l = imports.length; i < l; i++) {\n        var module = imports[i];\n        var symbol = module[id];\n        if (symbol !== undefined) { return symbol; }\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nfunction Doc(data) {\n    //  FIXME: Что тут использовать? Array.isArray?\n    if (data instanceof Array) {\n        data = {\n            //  FIXME: Сделать название поля ('item') настраеваемым.\n            'item': data\n        };\n    }\n\n    this.root = {\n        data: data,\n        parent: null,\n        name: '',\n        doc: this\n    };\n\n    this._vars = {};\n    this._keys = {};\n}\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\n\nyr.Module = Module;\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n})();\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: Для использования из node.js.\n//  При этом недостаточно просто проверить window/document.\n//  Потому что в тестах runtime грузится не как модуль (пока что, надеюсь),\n//  но просто эвалится, поэтому в нем module не определен.\n//\nif (typeof module === 'object' && module.exports) {\n    module.exports = yr;\n}\n\n";
 
     // Добавляем внешние функции, если есть.
     if (ext_content) {
@@ -205,7 +205,7 @@ module.exports = yate;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./factory.js":6,"./grammar.js":7,"./yate.js":12,"fs":13,"parse-tools":26,"vm":16}],2:[function(require,module,exports){
+},{"./factory.js":6,"./grammar.js":7,"./yate.js":12,"fs":13,"parse-tools":24,"vm":34}],2:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var no = require('nommon');
@@ -468,7 +468,7 @@ yate.AST.fromJSON = function(obj, input) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./scope.js":9,"./types.js":10,"./yate.js":12,"fs":13,"nommon":18,"parse-tools":26}],3:[function(require,module,exports){
+},{"./scope.js":9,"./types.js":10,"./yate.js":12,"fs":13,"nommon":16,"parse-tools":24}],3:[function(require,module,exports){
 var pt = require('parse-tools');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3250,7 +3250,7 @@ yate.asts.cdata = {};
 yate.asts.cdata._getType = no.value('xml');
 
 
-},{"./ast.js":2,"./consts.js":4,"./entities.json":5,"./runtime.js":8,"./scope.js":9,"./types.js":10,"./yate.js":12,"nommon":18,"parse-tools":26}],4:[function(require,module,exports){
+},{"./ast.js":2,"./consts.js":4,"./entities.json":5,"./runtime.js":8,"./scope.js":9,"./types.js":10,"./yate.js":12,"nommon":16,"parse-tools":24}],4:[function(require,module,exports){
 var yate = require('./yate.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3662,7 +3662,7 @@ yate.factory = new pt.Factory(yate.AST, yate.asts);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./ast.js":2,"./asts.js":3,"./yate.js":12,"parse-tools":26}],7:[function(require,module,exports){
+},{"./ast.js":2,"./asts.js":3,"./yate.js":12,"parse-tools":24}],7:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -4973,7 +4973,7 @@ yate.grammar = new pt.Grammar(grammar);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate.js":12,"parse-tools":26,"path":15}],8:[function(require,module,exports){
+},{"./yate.js":12,"parse-tools":24,"path":32}],8:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate runtime
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -5061,10 +5061,6 @@ yr.xml2attr = function(s) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 yr.register = function(id, module) {
-    if ( modules[id] ) {
-        throw Error('Module "' + id + '" already exists');
-    }
-
     //  Резолвим ссылки на импортируемые модули.
 
     var ids = module.imports || [];
@@ -6140,8 +6136,10 @@ yate.types.commonType = function(left, right) {
 
 
 },{"./yate":12}],11:[function(require,module,exports){
-var global=typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};global.yate = require('./actions.js');
+(function (global){
+global.yate = require('./actions.js');
 
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./actions.js":1}],12:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate
@@ -6165,382 +6163,6 @@ module.exports = yate;
 },{"../package.json":35}],13:[function(require,module,exports){
 
 },{}],14:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
-    }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            if (ev.source === window && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
-    }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
-
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-}
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-
-},{}],15:[function(require,module,exports){
-var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
-  }
-
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
-  }
-
-  return root + dir;
-};
-
-
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-
-exports.extname = function(path) {
-  return splitPath(path)[3];
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-},{"__browserify_process":14}],16:[function(require,module,exports){
-var indexOf = require('indexof');
-
-var Object_keys = function (obj) {
-    if (Object.keys) return Object.keys(obj)
-    else {
-        var res = [];
-        for (var key in obj) res.push(key)
-        return res;
-    }
-};
-
-var forEach = function (xs, fn) {
-    if (xs.forEach) return xs.forEach(fn)
-    else for (var i = 0; i < xs.length; i++) {
-        fn(xs[i], i, xs);
-    }
-};
-
-var Script = exports.Script = function NodeScript (code) {
-    if (!(this instanceof Script)) return new Script(code);
-    this.code = code;
-};
-
-Script.prototype.runInNewContext = function (context) {
-    if (!context) context = {};
-    
-    var iframe = document.createElement('iframe');
-    if (!iframe.style) iframe.style = {};
-    iframe.style.display = 'none';
-    
-    document.body.appendChild(iframe);
-    
-    var win = iframe.contentWindow;
-    
-    forEach(Object_keys(context), function (key) {
-        win[key] = context[key];
-    });
-     
-    if (!win.eval && win.execScript) {
-        // win.eval() magically appears when this is called in IE:
-        win.execScript('null');
-    }
-    
-    var winKeys = Object_keys(win);
-
-    var res = win.eval(this.code);
-    
-    forEach(Object_keys(win), function (key) {
-        // Avoid copying circular objects like `top` and `window` by only
-        // updating existing context properties or new properties in the `win`
-        // that was only introduced after the eval.
-        if (key in context || indexOf(winKeys, key) === -1) {
-            context[key] = win[key];
-        }
-    });
-    
-    document.body.removeChild(iframe);
-    
-    return res;
-};
-
-Script.prototype.runInThisContext = function () {
-    return eval(this.code); // maybe...
-};
-
-Script.prototype.runInContext = function (context) {
-    // seems to be just runInNewContext on magical context objects which are
-    // otherwise indistinguishable from objects except plain old objects
-    // for the parameter segfaults node
-    return this.runInNewContext(context);
-};
-
-forEach(Object_keys(Script.prototype), function (name) {
-    exports[name] = Script[name] = function (code) {
-        var s = Script(code);
-        return s[name].apply(s, [].slice.call(arguments, 1));
-    };
-});
-
-exports.createScript = function (code) {
-    return exports.Script(code);
-};
-
-exports.createContext = Script.createContext = function (context) {
-    // not really sure what this one does
-    // seems to just make a shallow copy
-    var copy = {};
-    if(typeof context === 'object') {
-        forEach(Object_keys(context), function (key) {
-            copy[key] = context[key];
-        });
-    }
-    return copy;
-};
-
-},{"indexof":17}],17:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -6551,7 +6173,53 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],18:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
+//  Inspired by: https://github.com/Marak/colors.js
+
+(function() {
+
+var colors = {
+
+    //  Styles
+    'bold'      : [1,  22],
+    'italic'    : [3,  23],
+    'underline' : [4,  24],
+    'inverse'   : [7,  27],
+
+    //  Dark colors
+    'gray'      : [30, 39],
+    'maroon'    : [31, 39],
+    'green'     : [32, 39],
+    'olive'     : [33, 39],
+    'navy'      : [34, 39],
+    'purple'    : [35, 39],
+    'teal'      : [36, 39],
+    'silver'    : [37, 39],
+
+    //  Bright colors
+    'black'     : [90, 39],
+    'red'       : [91, 39],
+    'lime'      : [92, 39],
+    'yellow'    : [93, 39],
+    'blue'      : [94, 39],
+    'fuchsia'   : [95, 39],
+    'aqua'      : [96, 39],
+    'white'     : [97, 39]
+
+};
+
+for (var color in colors) {
+    String.prototype.__defineGetter__(color, (function (color) {
+        return function() {
+            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
+        }
+    })( colors[color] ));
+}
+
+})();
+
+
+},{}],16:[function(require,module,exports){
 var no = require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6570,7 +6238,7 @@ module.exports = no;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.array.js":19,"./no.base.js":20,"./no.events.js":21,"./no.jpath.js":22,"./no.object.js":23,"./no.promise.js":25}],19:[function(require,module,exports){
+},{"./no.array.js":17,"./no.base.js":18,"./no.events.js":19,"./no.jpath.js":20,"./no.object.js":21,"./no.promise.js":23}],17:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6602,8 +6270,9 @@ no.array.map = function(array, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],20:[function(require,module,exports){
-var process=require("__browserify_process");//  ---------------------------------------------------------------------------------------------------------------  //
+},{"./no.base.js":18}],18:[function(require,module,exports){
+(function (process){
+//  ---------------------------------------------------------------------------------------------------------------  //
 //  no
 //  ---------------------------------------------------------------------------------------------------------------  //
 
@@ -6710,7 +6379,8 @@ if ( no.de ) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"__browserify_process":14}],21:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":33}],19:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if ( no.de ) {
@@ -6851,7 +6521,7 @@ no.Events.forward = function(name, object) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],22:[function(require,module,exports){
+},{"./no.base.js":18}],20:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 require('./no.parser.js');
@@ -8029,7 +7699,7 @@ function compileSetter(jpath) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20,"./no.parser.js":24}],23:[function(require,module,exports){
+},{"./no.base.js":18,"./no.parser.js":22}],21:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8055,7 +7725,7 @@ no.object.map = function(object, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],24:[function(require,module,exports){
+},{"./no.base.js":18}],22:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8150,7 +7820,7 @@ no.Parser.prototype.error = function(msg) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],25:[function(require,module,exports){
+},{"./no.base.js":18}],23:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if  ( no.de ) {
@@ -8397,7 +8067,7 @@ no.Promise.rejected = function(result) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20,"./no.events.js":21}],26:[function(require,module,exports){
+},{"./no.base.js":18,"./no.events.js":19}],24:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  parse-tools
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8420,7 +8090,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.ast.js":27,"./pt.codegen.js":28,"./pt.factory.js":29,"./pt.grammar.js":30,"./pt.inputstream.js":31,"./pt.js":32,"./pt.parser.js":33}],27:[function(require,module,exports){
+},{"./pt.ast.js":25,"./pt.codegen.js":26,"./pt.factory.js":27,"./pt.grammar.js":28,"./pt.inputstream.js":29,"./pt.js":30,"./pt.parser.js":31}],25:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  pt.AST
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8566,7 +8236,7 @@ pt.AST.prototype.toString = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"no.colors":34}],28:[function(require,module,exports){
+},{"./pt.js":30,"no.colors":15}],26:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var pt = require('./pt.js');
@@ -8804,7 +8474,7 @@ pt.Codegen.prototype._doMacro = function(macro, ast) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32}],29:[function(require,module,exports){
+},{"./pt.js":30}],27:[function(require,module,exports){
 var pt = require('./pt.js');
 
 var no = require('nommon');
@@ -8901,7 +8571,7 @@ pt.Factory.prototype.get = function(id) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"nommon":18}],30:[function(require,module,exports){
+},{"./pt.js":30,"nommon":16}],28:[function(require,module,exports){
 var pt = require('./pt.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9054,7 +8724,7 @@ pt.Grammar.prototype.makeSkipper = function(id, skipper) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32}],31:[function(require,module,exports){
+},{"./pt.js":30}],29:[function(require,module,exports){
 var fs_ = require('fs');
 var path_ = require('path');
 
@@ -9163,7 +8833,7 @@ pt.InputStream.prototype.getPos = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"fs":13,"path":15}],32:[function(require,module,exports){
+},{"./pt.js":30,"fs":13,"path":32}],30:[function(require,module,exports){
 var pt = {};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9173,7 +8843,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{}],33:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9382,53 +9052,471 @@ pt.Parser.prototype.getState = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.inputstream.js":31,"./pt.js":32,"path":15}],34:[function(require,module,exports){
-//  Inspired by: https://github.com/Marak/colors.js
+},{"./pt.inputstream.js":29,"./pt.js":30,"path":32}],32:[function(require,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-(function() {
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
 
-var colors = {
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
 
-    //  Styles
-    'bold'      : [1,  22],
-    'italic'    : [3,  23],
-    'underline' : [4,  24],
-    'inverse'   : [7,  27],
-
-    //  Dark colors
-    'gray'      : [30, 39],
-    'maroon'    : [31, 39],
-    'green'     : [32, 39],
-    'olive'     : [33, 39],
-    'navy'      : [34, 39],
-    'purple'    : [35, 39],
-    'teal'      : [36, 39],
-    'silver'    : [37, 39],
-
-    //  Bright colors
-    'black'     : [90, 39],
-    'red'       : [91, 39],
-    'lime'      : [92, 39],
-    'yellow'    : [93, 39],
-    'blue'      : [94, 39],
-    'fuchsia'   : [95, 39],
-    'aqua'      : [96, 39],
-    'white'     : [97, 39]
-
-};
-
-for (var color in colors) {
-    String.prototype.__defineGetter__(color, (function (color) {
-        return function() {
-            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
-        }
-    })( colors[color] ));
+  return parts;
 }
 
-})();
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe =
+    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+var splitPath = function(filename) {
+  return splitPathRe.exec(filename).slice(1);
+};
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
 
 
-},{}],35:[function(require,module,exports){
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function(path) {
+  var result = splitPath(path),
+      root = result[0],
+      dir = result[1];
+
+  if (!root && !dir) {
+    // No dirname whatsoever
+    return '.';
+  }
+
+  if (dir) {
+    // It has a dirname, strip trailing slash
+    dir = dir.substr(0, dir.length - 1);
+  }
+
+  return root + dir;
+};
+
+
+exports.basename = function(path, ext) {
+  var f = splitPath(path)[2];
+  // TODO: make this comparison case-insensitive on windows?
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+
+exports.extname = function(path) {
+  return splitPath(path)[3];
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":33}],33:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = setTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    clearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],34:[function(require,module,exports){
+var indexOf = require('indexof');
+
+var Object_keys = function (obj) {
+    if (Object.keys) return Object.keys(obj)
+    else {
+        var res = [];
+        for (var key in obj) res.push(key)
+        return res;
+    }
+};
+
+var forEach = function (xs, fn) {
+    if (xs.forEach) return xs.forEach(fn)
+    else for (var i = 0; i < xs.length; i++) {
+        fn(xs[i], i, xs);
+    }
+};
+
+var defineProp = (function() {
+    try {
+        Object.defineProperty({}, '_', {});
+        return function(obj, name, value) {
+            Object.defineProperty(obj, name, {
+                writable: true,
+                enumerable: false,
+                configurable: true,
+                value: value
+            })
+        };
+    } catch(e) {
+        return function(obj, name, value) {
+            obj[name] = value;
+        };
+    }
+}());
+
+var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
+'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
+'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
+'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
+'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
+
+function Context() {}
+Context.prototype = {};
+
+var Script = exports.Script = function NodeScript (code) {
+    if (!(this instanceof Script)) return new Script(code);
+    this.code = code;
+};
+
+Script.prototype.runInContext = function (context) {
+    if (!(context instanceof Context)) {
+        throw new TypeError("needs a 'context' argument.");
+    }
+    
+    var iframe = document.createElement('iframe');
+    if (!iframe.style) iframe.style = {};
+    iframe.style.display = 'none';
+    
+    document.body.appendChild(iframe);
+    
+    var win = iframe.contentWindow;
+    var wEval = win.eval, wExecScript = win.execScript;
+
+    if (!wEval && wExecScript) {
+        // win.eval() magically appears when this is called in IE:
+        wExecScript.call(win, 'null');
+        wEval = win.eval;
+    }
+    
+    forEach(Object_keys(context), function (key) {
+        win[key] = context[key];
+    });
+    forEach(globals, function (key) {
+        if (context[key]) {
+            win[key] = context[key];
+        }
+    });
+    
+    var winKeys = Object_keys(win);
+
+    var res = wEval.call(win, this.code);
+    
+    forEach(Object_keys(win), function (key) {
+        // Avoid copying circular objects like `top` and `window` by only
+        // updating existing context properties or new properties in the `win`
+        // that was only introduced after the eval.
+        if (key in context || indexOf(winKeys, key) === -1) {
+            context[key] = win[key];
+        }
+    });
+
+    forEach(globals, function (key) {
+        if (!(key in context)) {
+            defineProp(context, key, win[key]);
+        }
+    });
+    
+    document.body.removeChild(iframe);
+    
+    return res;
+};
+
+Script.prototype.runInThisContext = function () {
+    return eval(this.code); // maybe...
+};
+
+Script.prototype.runInNewContext = function (context) {
+    var ctx = Script.createContext(context);
+    var res = this.runInContext(ctx);
+
+    forEach(Object_keys(ctx), function (key) {
+        context[key] = ctx[key];
+    });
+
+    return res;
+};
+
+forEach(Object_keys(Script.prototype), function (name) {
+    exports[name] = Script[name] = function (code) {
+        var s = Script(code);
+        return s[name].apply(s, [].slice.call(arguments, 1));
+    };
+});
+
+exports.createScript = function (code) {
+    return exports.Script(code);
+};
+
+exports.createContext = Script.createContext = function (context) {
+    var copy = new Context();
+    if(typeof context === 'object') {
+        forEach(Object_keys(context), function (key) {
+            copy[key] = context[key];
+        });
+    }
+    return copy;
+};
+
+},{"indexof":14}],35:[function(require,module,exports){
 module.exports={
     "author": {
         "name": "Sergey Nikitin",
@@ -9458,9 +9546,9 @@ module.exports={
         "sinon-chai": "~2.3",
         "chai": "~1.5",
         "grunt": "~0.4",
-        "grunt-simple-mocha": "git://github.com/yaymukund/grunt-simple-mocha.git",
-        "grunt-contrib-watch": "~0.5.0",
-        "grunt-browserify": "~1.2.4",
+        "grunt-simple-mocha": "^0.4.1",
+        "grunt-contrib-watch": "^0.5.0",
+        "grunt-browserify": "5.0.0",
         "matchdep": "~0.1.2"
     },
     "optionalDependencies": {},
@@ -9485,4 +9573,4 @@ module.exports={
     }
 }
 
-},{}]},{},[11])
+},{}]},{},[11]);
