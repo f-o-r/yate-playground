@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var fs_ = require('fs');
 var vm_ = require('vm');
 
@@ -16,6 +16,7 @@ require('./grammar.js');
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate actions
 //  ---------------------------------------------------------------------------------------------------------------  //
+
 
 yate.parse = function(filename) {
     var parser = new pt.Parser(yate.grammar, yate.factory);
@@ -37,13 +38,14 @@ yate.parse = function(filename) {
 
 // ----------------------------------------------------------------------------------------------------------------- //
 
-yate.compile = function(filename) {
+yate.compile = function(filename, options) {
+    options = options || {};
 
     //  Парсим
     //  ------
 
     /// console.time('parse');
-    var ast = yate.parse(filename);
+    var ast = yate.parse(filename, options);
     /// console.timeEnd('parse');
 
 
@@ -53,7 +55,7 @@ yate.compile = function(filename) {
     /// console.time('walk');
 
     ast.walkdo(function(ast) {
-        ast.w_deinclude();
+        ast.w_deinclude(options);
     });
 
     ast.walkdo(function(ast) {
@@ -79,6 +81,10 @@ yate.compile = function(filename) {
         ast.w_setScope();
     });
     /// console.timeEnd('walk.scope');
+
+    ast.walkdo(function(ast) {
+        ast.w_declarations();
+    });
 
     //  Действие над каждой нодой в ast, не выходящее за рамки этой ноды и ее state/scope/context.
     /// console.time('walk.action');
@@ -124,7 +130,7 @@ yate.compile = function(filename) {
     //  Подготовка к кодогенерации.
     /// console.time('walk.prepare');
     ast.dowalk(function(ast) {
-        ast.w_prepare();
+        ast.w_prepare( options );
     });
     /// console.timeEnd('walk.prepare');
 
@@ -161,7 +167,7 @@ yate.compile = function(filename) {
 yate.run = function(yate_cotent, data, ext_content, mode) {
 
     // Читаем runtime.
-    var js = "//  ---------------------------------------------------------------------------------------------------------------  //\n//  yate runtime\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar yr = {};\n\n(function() {\n\nyr.log = function() {};\n\n//  TODO:\n//  Пустой массив. Можно использовать везде, где предполается,\n//  что он read-only. Например, когда из select() возвращается пустой нодесет и т.д.\n//  var emptyA = [];\n\nvar modules = {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Кешируем регулярки для лучшей производительности.\n//  (http://jsperf.com/entityify-test/2)\n//\nvar RE_AMP = /&/g;\nvar RE_LT = /</g;\nvar RE_GT = />/g;\nvar RE_QUOTE = /\"/g;\n\nvar RE_E_AMP = /&amp;/g;\nvar RE_E_LT = /&lt;/g;\nvar RE_E_GT = /&gt;/g;\n\nyr.text2xml = function(s) {\n    if (s == null) { return ''; }\n\n    //  NOTE: Странное поведение Safari в этом месте.\n    //  Иногда сюда попадает объект, которые != null, но при этом у него\n    //  нет метода toString. По идее, такого быть просто не может.\n    //  Попытки пронаблюдать этот объект (при помощи console.log и т.д.)\n    //  приводят к тому, что он \"нормализуется\" и баг пропадает.\n    //  Вообще, любые операции, которые неявно приводят его к строке, например,\n    //  тоже приводят к нормализации и пропаданию бага.\n    //\n    //  Поэтому, вместо `s.toString()` используем `('' + s)`.\n    //\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2text = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_E_LT, '<')\n        .replace(RE_E_GT, '>')\n        .replace(RE_E_AMP, '&');\n};\n\nyr.text2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.register = function(id, module) {\n    if ( modules[id] ) {\n        throw Error('Module \"' + id + '\" already exists');\n    }\n\n    //  Резолвим ссылки на импортируемые модули.\n\n    var ids = module.imports || [];\n    /// module.id = id;\n    //  Для удобства добавляем в imports сам модуль.\n    var imports = [ module ];\n    for (var i = 0, l = ids.length; i < l; i++) {\n        var module_ = modules[ ids[i] ];\n        if (!module_) {\n            throw Error('Module \"' + ids[i] + '\" doesn\\'t exist');\n        } else {\n            imports = imports.concat(module_.imports);\n        }\n    }\n    //  В результате мы дерево импортов превратили в плоский список.\n    module.imports = imports;\n\n    modules[id] = module;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.run = function(id, data, mode) {\n    mode = mode || '';\n\n    var module = modules[id];\n    if (!module) {\n        throw 'Module \"' + id + '\" is undefined';\n    }\n\n    var doc = new Doc(data);\n\n    var r = module.a(module, [ doc.root ], mode, { a: {} } );\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.join = function join(left, right) {\n    return left.concat(right);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeValue = function nodeValue(node) {\n    var data = node.data;\n    return (typeof data === 'object') ? '': data;\n};\n\nyr.nodeName = function nodeName(nodeset) {\n    var node = nodeset[0];\n\n    return (node) ? node.name : '';\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.simpleScalar = function simpleScalar(name, context) {\n    var data = context.data;\n    if (!data) { return ''; }\n\n    if (name === '*') {\n        for (var key in data) {\n            return yr.simpleScalar(key, context);\n        }\n        return '';\n    }\n\n    var r = data[name];\n\n    if (typeof r === 'object') {\n        return '';\n    }\n\n    return (r === undefined) ? '' : r;\n};\n\nyr.simpleBoolean = function simpleBoolean(name, context) {\n    var data = context.data;\n    if (!data) { return false; }\n\n    if (name === '*') {\n        for (var key in data) {\n            var r = yr.simpleBoolean(key, context);\n            if (r) { return true; }\n        }\n        return false;\n    }\n\n    var r = data[name];\n\n    if (!r) { return false; }\n\n    if (r instanceof Array) {\n        return r.length;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2scalar = function nodeset2scalar(nodeset) {\n    if (!nodeset.length) { return ''; }\n\n    var data = nodeset[0].data;\n    return (typeof data == 'object') ? '': data;\n};\n\nyr.nodeset2boolean = function nodeset2boolean(nodeset) {\n    if (! (nodeset && nodeset.length > 0) ) {\n        return false;\n    }\n\n    return !!nodeset[0].data;\n};\n\nyr.nodeset2xml = function nodeset2xml(nodeset) {\n    return yr.scalar2xml( yr.nodeset2scalar(nodeset) );\n};\n\nyr.nodeset2attrvalue = function nodeset2attrvalue(nodeset) {\n    return yr.scalar2attrvalue( yr.nodeset2scalar(nodeset) );\n};\n\nyr.scalar2xml = yr.text2xml;\nyr.xml2scalar = yr.xml2text;\n\n//  FIXME: Откуда вообще взялась идея, что xml в атрибуты нужно кастить не так, как скаляры?!\n//  Смотри #157. Не нужно квотить амперсанд, потому что он уже заквочен.\nyr.xml2attrvalue = yr.xml2attr;\n\nyr.scalar2attrvalue = yr.text2attr;\n\nyr.object2nodeset = function object2nodeset(object) {\n    return [ ( new Doc(object) ).root ];\n};\n\nyr.array2nodeset = function array2nodeset(array) {\n    var object = {\n        'item': array\n    };\n    return [ ( new Doc(object) ).root ];\n};\n\n//  Сравниваем скаляр left с нодесетом right.\nyr.cmpSN = function cmpSN(left, right) {\n    for (var i = 0, l = right.length; i < l; i++) {\n        if ( left == yr.nodeValue( right[i] ) ) {\n            return true;\n        }\n    }\n    return false;\n};\n\n//  Сравниваем два нодесета.\nyr.cmpNN = function cmpNN(left, right) {\n    var m = right.length;\n\n    if (m === 0) { return false; }\n    if (m === 1) { return yr.cmpSN( yr.nodeValue( right[0] ), left ); }\n\n    var values = [];\n\n    var rv = yr.nodeValue( right[0] );\n    for (var i = 0, l = left.length; i < l; i++) {\n        var lv = yr.nodeValue( left[i] );\n        if (lv == rv) { return true; }\n        values[i] = lv;\n    }\n\n    for (var j = 1; j < m; j++) {\n        rv = yr.nodeValue( right[j] );\n        for (var i = 0, l = left.length; i < l; i++) {\n            if ( values[i] == rv ) { return true; }\n        }\n    }\n\n    return false;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.shortTags = {\n    br: true,\n    col: true,\n    embed: true,\n    hr: true,\n    img: true,\n    input: true,\n    link: true,\n    meta: true,\n    param: true,\n    wbr: true\n};\n\nyr.closeAttrs = function closeAttrs(a) {\n    var name = a.s;\n\n    if (name) {\n        var r = '';\n        var attrs = a.a;\n\n        for (var attr in attrs) {\n            r += ' ' + attr + '=\"' + attrs[attr].quote() + '\"';\n        }\n        /*\n        for (var attr in attrs) {\n            if ( attrs.hasOwnProperty(attr) ) {\n                var v = attrs[attr];\n                if (v.quote) {\n                    r += ' ' + attr + '=\"' + v.quote() + '\"';\n                } else {\n                    yr.log({\n                        id: 'NO_QUOTE',\n                        message: \"Attr doesn't have quote() method\",\n                        data: {\n                            key: attr,\n                            value: v\n                        }\n                    });\n                }\n            } else {\n                yr.log({\n                    id: 'BAD_PROTOTYPE',\n                    message: 'Object prototype is corrupted',\n                    data: {\n                        key: attr,\n                        value: v\n                    }\n                });\n            }\n        }\n        */\n        r += (yr.shortTags[name]) ? '/>' : '>';\n        a.s = null;\n\n        return r;\n    }\n\n    return '';\n};\n\nyr.copyAttrs = function copyAttrs(to, from) {\n    for (var key in from) {\n        to[key] = from[key];\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.scalarAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.scalarAttr.prototype.quote = function() {\n    return yr.text2attr(this.s);\n};\n\nfunction quoteAmp(s) {\n    return s.replace(/&/g, '&amp;');\n}\n\nyr.scalarAttr.prototype.addxml = function(xml) {\n    return new yr.xmlAttr( quoteAmp(this.s) + xml );\n};\n\nyr.scalarAttr.prototype.addscalar = function(xml) {\n    return new yr.scalarAttr( this.s + xml );\n};\n\nyr.xmlAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.xmlAttr.prototype.quote = function() {\n    return yr.xml2attr(this.s);\n};\n\nyr.xmlAttr.prototype.addscalar = function(scalar) {\n    return new yr.xmlAttr( this.s + quoteAmp(scalar) );\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.slice = function(s, from, to) {\n    //  NOTE: См. коммент про Safari выше.\n\n    s = '' + s;\n    return (to) ? s.slice(from, to) : s.slice(from);\n};\n\nyr.exists = function(nodeset) {\n    return nodeset.length > 0;\n};\n\nyr.grep = function(nodeset, predicate) {\n    var r = [];\n    for (var index = 0, count = nodeset.length; index < count; index++) {\n        var node = nodeset[index];\n        if (predicate(node, index, count)) {\n            r.push(node);\n        }\n    }\n    return r;\n};\n\nyr.byIndex = function(nodeset, i) {\n    return nodeset.slice(i, i + 1);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.sort = function(nodes, by, desc) {\n    var values = [];\n    for (var i = 0, l = nodes.length; i < l; i++) {\n        var node = nodes[i];\n        var value = by(node, i, l);\n        values.push({\n            node: node,\n            value: value\n        });\n    }\n\n    var greater = (desc) ? -1 : +1;\n    var less = (desc) ? +1 : -1;\n\n    var sorted = values.sort(function(a, b) {\n        var va = a.value;\n        var vb = b.value;\n        if (va < vb) { return less; }\n        if (va > vb) { return greater; }\n        return 0;\n    });\n\n    var r = [];\n    for (var i = 0, l = sorted.length; i < l; i++) {\n        r.push( sorted[i].node );\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2data = function(nodes) {\n    var l = nodes.length;\n    if (l === 0) {\n        return '';\n    }\n\n    if (l === 1) {\n        return nodes[0].data;\n    }\n\n    var data = [];\n    for (var i = 0; i < l; i++) {\n        data.push( nodes[i].data );\n    }\n\n    return data;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.externals = {};\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  Module\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\nvar Module = function() {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex applyValue.\nModule.prototype.a = function applyValue(M, nodeset, mode, a0) {\n    var r = '';\n\n    //  Достаем аргументы, переданные в apply, если они там есть.\n    var args;\n    if (arguments.length > 4) {\n        args = Array.prototype.slice.call(arguments, 4);\n    }\n\n    var imports = M.imports;\n\n    //  Идем по нодесету.\n    for (var i0 = 0, l0 = nodeset.length; i0 < l0; i0++) {\n        var c0 = nodeset[i0];\n\n        //  Для каждой ноды ищем подходящий шаблон.\n        //  Сперва ищем в текущем модуле ( imports[0] ),\n        //  затем идем далее по списку импортов.\n\n        //  Если мы найдем шаблон, в found будет его id, а в module -- модуль,\n        //  в котором находится этот шаблон.\n        var found = false;\n        var module;\n\n        var i2 = 0;\n        var l2 = imports.length;\n        var template;\n        while (!found && i2 < l2) {\n            module = imports[i2++];\n\n            //  matcher представляем собой двухуровневый объект,\n            //  на первом уровне ключами являются моды,\n            //  на втором -- имена нод.\n            //  Значения на втором уровне -- список id-шников шаблонов.\n            var names = module.matcher[mode];\n\n            if (names) {\n                //  FIXME: Тут неправильно. Если шаблоны для c0.name будут,\n                //  но ни один из них не подойдет, то шаблоны для '*' не применятся вообще.\n                //  FIXME: Плюс шаблоны на '*' всегда имеют более низкий приоритет.\n                var templates = names[c0.name] || names['*'];\n                if (templates) {\n                    var i3 = 0;\n                    var l3 = templates.length;\n                    while (!found && i3 < l3) {\n                        var tid = templates[i3++];\n                        template = module[tid];\n\n                        var selector = template.j;\n                        if (selector) {\n                            //  В template.j лежит id селектора (jpath'а).\n                            //  В tempalte.a флаг о том, является ли jpath абсолютным.\n                            if ( module.matched(selector, template.a, c0, i0, l0) ) {\n                                found = tid;\n                            }\n                        } else {\n                            var selectors = template.s;\n                            var abs = template.a;\n                            //  В template.s лежит массив с id-шниками селекторов.\n                            for (var i4 = 0, l4 = selectors.length; i4 < l4; i4++) {\n                                if ( module.matched(selectors[i4], abs[i4], c0, i0, l0) ) {\n                                    found = tid;\n                                    break;\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n\n        if (found) {\n            //  Шаблон нашли, применяем его.\n            if (args) {\n                //  Шаблон позвали с параметрами, приходится изгаляться.\n                r += template.apply( M, [M, c0, i0, l0, a0].concat(args) );\n            } else {\n                r += template(M, c0, i0, l0, a0);\n            }\n        }\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.matched = function matched(jpath, abs, c0, i0, l0) {\n    if (jpath === 1) {\n        //  Это jpath '/'\n        return !c0.parent;\n    }\n\n    var l = jpath.length;\n    //  i (и l) всегда будет четное.\n    var i = l - 2;\n    while (i >= 0) {\n        if (!c0) { return false; }\n\n        var step = jpath[i];\n        //  Тут step может быть либо 0 (nametest), либо 2 (predicate).\n        //  Варианты 1 (dots) и 3 (index) в jpath'ах в селекторах запрещены.\n        switch (step) {\n            case 0:\n                //  Nametest.\n                var name = jpath[i + 1];\n                if (name !== '*' && name !== c0.name) { return false; }\n                c0 = c0.parent;\n                break;\n\n            case 2:\n            case 4:\n                //  Predicate or guard.\n                var predicate = jpath[i + 1];\n                if ( !predicate(this, c0, i0, l0) ) { return false; }\n                break;\n        }\n\n        i -= 2;\n    }\n\n    if (abs && c0.parent) {\n        return false;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex selectN.\nModule.prototype.s = function selectN(jpath, node) {\n    return this.n( jpath, [ node ] );\n};\n\n//  NOTE: ex selectNs.\nModule.prototype.n = function selectNs(jpath, nodeset) {\n\n    var current = nodeset;\n    var m = current.length;\n\n    var result;\n    for (var i = 0, n = jpath.length; i < n; i += 2) {\n        result = [];\n\n        var type = jpath[i];\n        var step = jpath[i + 1];\n\n        switch (type) {\n\n            case 0: // Это nametest (.foo или .*), в step 'foo' или '*'.\n                for (var j = 0; j < m; j++) {\n                    yr.selectNametest(step, current[j], result);\n                }\n                break;\n\n            case 1: // Это dots (., .., ...), в step количество шагов минус один ( . -- 0, .. -- 1, ... -- 2 и т.д. ).\n                for (var j = 0; j < m; j++) {\n                    var k = 0;\n                    var node = current[j];\n                    while (k < step && node) {\n                        node = node.parent;\n                        k++;\n                    }\n                    if (node) {\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 2: // Это filter, в step предикат.\n                for (var j = 0; j < m; j++) {\n                    var node = current[j];\n                    if (step(this, node, j, m)) { // Предикат принимает четыре параметра: module, node, index и count.\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 3: // Это index, в step индекс нужного элемента.\n                var node = current[ step ];\n                result = (node) ? [ node ] : [];\n                break;\n\n            case 4:\n                //  Это глобальный гвард.\n                if (m > 0) {\n                    var node = current[0];\n                    if ( step(this, node.doc.root, 0, 1) ) {\n                        result = result.concat(current);\n                    }\n                }\n\n        }\n\n        current = result;\n        m = current.length;\n\n        if (!m) { return []; }\n    }\n\n    return result;\n};\n\nyr.selectNametest = function selectNametest(step, context, result) {\n\n    var data = context.data;\n\n    if (!data || typeof data !== 'object') { return result; }\n\n    if (step === '*') {\n        if (data instanceof Array) {\n            for (var i = 0, l = data.length; i < l; i++) {\n                yr.selectNametest(i, context, result);\n            }\n        } else {\n            for (step in data) {\n                yr.selectNametest(step, context, result);\n            }\n        }\n        return result;\n    }\n\n    data = data[step];\n    if (data === undefined) { return result; }\n\n    var doc = context.doc;\n    if (data instanceof Array) {\n        for (var i = 0, l = data.length; i < l; i++) {\n            result.push({\n                data: data[i],\n                parent: context,\n                name: step,\n                //  FIXME: Не нравится мне этот doc.\n                doc: doc\n            });\n        }\n    } else {\n        result.push({\n            data: data,\n            parent: context,\n            name: step,\n            //  FIXME: Не нравится мне этот doc.\n            doc: doc\n        });\n    }\n\n    return result;\n};\n\nyr.document = function(nodeset) {\n    var doc;\n    if (!nodeset.length) {\n        doc = new Doc( {} );\n    } else {\n        doc = new Doc( nodeset[0].data );\n    }\n    return [ doc.root ];\n};\n\nyr.subnode = function(name, data, context) {\n    var doc = context.doc;\n\n    if (data instanceof Array) {\n        var nodeset = [];\n        for (var i = 0, l = data.length; i < l; i++) {\n            nodeset.push({\n                data: data[i],\n                name: name,\n                parent: context,\n                doc: doc\n            });\n        }\n        return nodeset;\n    }\n\n    return [\n        {\n            data: data,\n            name: name,\n            parent: context,\n            doc: doc\n        }\n    ];\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Глобальные переменные у нас \"ленивые\" с кэшированием.\n//  В this[name] находится только лишь функция,\n//  вычисляющая нужное значение.\n//\n//  NOTE: ex vars\nModule.prototype.v = function vars(id, c0) {\n    var vars = c0.doc._vars;\n    var value = vars[id];\n    if (value === undefined) {\n        var var_ = this.findSymbol(id);\n        value = (typeof var_ === 'function') ? var_(this, c0, 0, 1) : var_;\n        vars[id] = value;\n    }\n    return value;\n};\n\n//  FIXME: Тут еще бывает a0, а иногда не бывает.\n//\n//  NOTE: ex funcs\nModule.prototype.f = function funcs(id, c0, i0, l0, v0) {\n    var func = this.findSymbol(id);\n\n    if (arguments.length > 5) {\n        //  Два и более аргументов.\n        var args = Array.prototype.slice.call(arguments);\n        args[0] = this;\n        return func.apply(this, args);\n    }\n\n    if (v0 !== undefined) {\n        //  Один аргумент.\n        return func(this, c0, i0, l0, v0);\n    }\n\n    //  Без аргументов.\n    return func(this, c0, i0, l0);\n};\n\n//  NOTE: ex keys.\nModule.prototype.k = function keys(id, use, c0, multiple) {\n    var keys = c0.doc._keys;\n\n    var key = this.findSymbol(id);\n\n    var cache = keys[id];\n    if (!cache) {\n        cache = this._initKey(key, id, use, c0);\n    }\n\n    var values = cache.values;\n    var nodes = cache.nodes;\n\n    var that = this;\n\n    if (multiple) {\n        //  В use -- нодесет.\n        var r;\n\n        if (cache.xml) {\n            r = '';\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r += getValue( yr.nodeValue(c0) );\n            }\n        } else {\n            r = [];\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r = r.concat( getValue( yr.nodeValue(c0) ) );\n            }\n        }\n\n        return r;\n\n    } else {\n        //  В use -- скаляр.\n        var value = values[use];\n        if (value === undefined) {\n            value = getValue(use);\n        }\n\n        return value;\n\n    }\n\n    function getValue(use) {\n        var nodes_ = nodes[use];\n\n        var r;\n        if (cache.xml) {\n            r = '';\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    //  FIXME: Нельзя ли тут последний параметр сделать общим,\n                    //  а не создавать его для каждого элемента цикла?\n                    r += key.b( that, node.c, node.i, node.l, {} );\n                }\n            }\n        } else {\n            r = [];\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    r = r.concat( key.b(that, node.c, node.i, node.l) );\n                }\n            }\n        }\n\n        values[use] = r;\n\n        return r;\n    }\n\n};\n\nModule.prototype._initKey = function(key, id, use, c0) {\n    var keys = c0.doc._keys;\n    var cache = keys[id] = {};\n\n    //  Тело ключ имеет тип xml.\n    cache.xml = (key.bt === 'xml');\n\n    //  Вычисляем нодесет с нодами, которые матчатся ключом.\n    var matched = key.n(this, c0);\n    //  Хранилище для этих нод.\n    var nodes = cache.nodes = {};\n\n    //  Значение use ключа может возвращать нодесет или скаляр.\n    if (key.ut === 'nodeset') {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            for (var j = 0, m = use_.length; j < m; j++) {\n                store( yr.nodeValue( use_[j] ), { c: c1, i: i0, l: l0 } );\n            }\n        }\n\n    } else {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            store( use_, { c: c1, i: i0, l: l0 } );\n        }\n\n    }\n\n    //  Хранилище для уже вычисленных значений ключа.\n    cache.values = {};\n\n    return cache;\n\n    //  Сохраняем ноду по соответствующему ключу.\n    //  Одному ключу может соответствовать несколько нод.\n    function store(key, info) {\n        var items = nodes[key];\n        if (!items) {\n            items = nodes[key] = [];\n        }\n        items.push(info);\n    }\n\n\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.findSymbol = function(id) {\n    var imports = this.imports;\n    for (var i = 0, l = imports.length; i < l; i++) {\n        var module = imports[i];\n        var symbol = module[id];\n        if (symbol !== undefined) { return symbol; }\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nfunction Doc(data) {\n    //  FIXME: Что тут использовать? Array.isArray?\n    if (data instanceof Array) {\n        data = {\n            //  FIXME: Сделать название поля ('item') настраеваемым.\n            'item': data\n        };\n    }\n\n    this.root = {\n        data: data,\n        parent: null,\n        name: '',\n        doc: this\n    };\n\n    this._vars = {};\n    this._keys = {};\n}\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\n\nyr.Module = Module;\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n})();\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: Для использования из node.js.\n//  При этом недостаточно просто проверить window/document.\n//  Потому что в тестах runtime грузится не как модуль (пока что, надеюсь),\n//  но просто эвалится, поэтому в нем module не определен.\n//\nif (typeof module === 'object' && module.exports) {\n    module.exports = yr;\n}\n\n";
+    var js = "//  ---------------------------------------------------------------------------------------------------------------  //\n//  yate runtime\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar yr = {};\n\n(function() {\n\nyr.log = function() {};\n\n//  TODO:\n//  Пустой массив. Можно использовать везде, где предполается,\n//  что он read-only. Например, когда из select() возвращается пустой нодесет и т.д.\n//  var emptyA = [];\n\nvar modules = {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Кешируем регулярки для лучшей производительности.\n//  (http://jsperf.com/entityify-test/2)\n//\nvar RE_AMP = /&/g;\nvar RE_LT = /</g;\nvar RE_GT = />/g;\nvar RE_QUOTE = /\"/g;\n\nvar RE_E_AMP = /&amp;/g;\nvar RE_E_LT = /&lt;/g;\nvar RE_E_GT = /&gt;/g;\n\nyr.text2xml = function(s) {\n    if (s == null) { return ''; }\n\n    //  NOTE: Странное поведение Safari в этом месте.\n    //  Иногда сюда попадает объект, которые != null, но при этом у него\n    //  нет метода toString. По идее, такого быть просто не может.\n    //  Попытки пронаблюдать этот объект (при помощи console.log и т.д.)\n    //  приводят к тому, что он \"нормализуется\" и баг пропадает.\n    //  Вообще, любые операции, которые неявно приводят его к строке, например,\n    //  тоже приводят к нормализации и пропаданию бага.\n    //\n    //  Поэтому, вместо `s.toString()` используем `('' + s)`.\n    //\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2text = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_E_LT, '<')\n        .replace(RE_E_GT, '>')\n        .replace(RE_E_AMP, '&');\n};\n\nyr.text2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_AMP, '&amp;')\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\nyr.xml2attr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    if (s == null) { return ''; }\n\n    return ('' + s)\n        .replace(RE_QUOTE, '&quot;')\n        .replace(RE_LT, '&lt;')\n        .replace(RE_GT, '&gt;');\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.register = function(id, module) {\n    //  Резолвим ссылки на импортируемые модули.\n\n    var ids = module.imports || [];\n    /// module.id = id;\n    //  Для удобства добавляем в imports сам модуль.\n    var imports = [ module ];\n    for (var i = 0, l = ids.length; i < l; i++) {\n        var module_ = modules[ ids[i] ];\n        if (!module_) {\n            throw Error('Module \"' + ids[i] + '\" doesn\\'t exist');\n        } else {\n            imports = imports.concat(module_.imports);\n        }\n    }\n    //  В результате мы дерево импортов превратили в плоский список.\n    module.imports = imports;\n\n    modules[id] = module;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.isRegistered = function (id) {\n    return !!modules[id];\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n// Вызов модуля\n// id - идентификатор модуля (String)\n// data - данные для отрисовки (Object, Array, String, Number)\n// mode - мода для поиска шаблонов в ней (String)\n// args - параметры вызова шаблона (Array)\n// nodeName - имя для корневой ноды (String)\n//\n// yr.run('moduleId', {'name': 'Vasya'}, 'profile', null, 'user')\n//\nyr.run = function(id, data, mode, args, nodeName) {\n    mode = mode || '';\n\n    var module = modules[id];\n    if (!module) {\n        throw 'Module \"' + id + '\" is undefined';\n    }\n\n    var doc = new Doc(data, nodeName);\n    var r;\n\n    if (args) {\n        r = module.a.apply(module, [module, 0, [doc.root], mode, { a: {} }].concat(args));\n    } else {\n        r = module.a(module, 0, [ doc.root ], mode, { a: {} } );\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.join = function join(left, right) {\n    return left.concat(right);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeValue = function nodeValue(node) {\n    var data = node.data;\n    return (typeof data === 'object') ? '': data;\n};\n\nyr.nodeName = function nodeName(nodeset) {\n    var node = nodeset[0];\n\n    return (node) ? node.name : '';\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.simpleScalar = function simpleScalar(name, context) {\n    var data = context.data;\n    if (!data) { return ''; }\n\n    if (name === '*') {\n        for (var key in data) {\n            return yr.simpleScalar(key, context);\n        }\n        return '';\n    }\n\n    var r = data[name];\n\n    if (typeof r === 'object') {\n        return '';\n    }\n\n    return (r === undefined) ? '' : r;\n};\n\nyr.simpleBoolean = function simpleBoolean(name, context) {\n    var data = context.data;\n    if (!data) { return false; }\n\n    if (name === '*') {\n        for (var key in data) {\n            var r = yr.simpleBoolean(key, context);\n            if (r) { return true; }\n        }\n        return false;\n    }\n\n    var r = data[name];\n\n    if (!r) { return false; }\n\n    if (Array.isArray(r)) {\n        return r.length;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2scalar = function nodeset2scalar(nodeset) {\n    if (!nodeset.length) { return ''; }\n\n    var data = nodeset[0].data;\n    return (typeof data == 'object') ? '': data;\n};\n\nyr.nodeset2boolean = function nodeset2boolean(nodeset) {\n    if (! (nodeset && nodeset.length > 0) ) {\n        return false;\n    }\n\n    return !!nodeset[0].data;\n};\n\nyr.nodeset2xml = function nodeset2xml(nodeset) {\n    return yr.scalar2xml( yr.nodeset2scalar(nodeset) );\n};\n\nyr.nodeset2attrvalue = function nodeset2attrvalue(nodeset) {\n    return yr.scalar2attrvalue( yr.nodeset2scalar(nodeset) );\n};\n\nyr.scalar2xml = yr.text2xml;\nyr.xml2scalar = yr.xml2text;\n\n//  FIXME: Откуда вообще взялась идея, что xml в атрибуты нужно кастить не так, как скаляры?!\n//  Смотри #157. Не нужно квотить амперсанд, потому что он уже заквочен.\nyr.xml2attrvalue = yr.xml2attr;\n\nyr.scalar2attrvalue = yr.text2attr;\n\nyr.object2nodeset = function object2nodeset(object) {\n    return [ ( new Doc(object) ).root ];\n};\n\nyr.array2nodeset = function array2nodeset(array) {\n    var object = {\n        'item': array\n    };\n    return [ ( new Doc(object) ).root ];\n};\n\n//  Сравниваем скаляр left с нодесетом right.\nyr.cmpSN = function cmpSN(left, right) {\n    for (var i = 0, l = right.length; i < l; i++) {\n        if ( left == yr.nodeValue( right[i] ) ) {\n            return true;\n        }\n    }\n    return false;\n};\n\n//  Сравниваем два нодесета.\nyr.cmpNN = function cmpNN(left, right) {\n    var m = right.length;\n\n    if (m === 0) { return false; }\n    if (m === 1) { return yr.cmpSN( yr.nodeValue( right[0] ), left ); }\n\n    var values = [];\n\n    var rv = yr.nodeValue( right[0] );\n    for (var i = 0, l = left.length; i < l; i++) {\n        var lv = yr.nodeValue( left[i] );\n        if (lv == rv) { return true; }\n        values[i] = lv;\n    }\n\n    for (var j = 1; j < m; j++) {\n        rv = yr.nodeValue( right[j] );\n        for (var i = 0, l = left.length; i < l; i++) {\n            if ( values[i] == rv ) { return true; }\n        }\n    }\n\n    return false;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.isShort = function( name ) {\n    return (\n        name === 'br' ||\n        name === 'col' ||\n        name === 'embed' ||\n        name === 'hr' ||\n        name === 'img' ||\n        name === 'input' ||\n        name === 'link' ||\n        name === 'meta' ||\n        name === 'param' ||\n        name === 'wbr'\n    );\n};\n\nvar rx_tagName = /[^a-zA-Z]/g;\nyr.tagName = function(name) {\n    if (!name) {\n        return 'div';\n    }\n    return (''+name).replace(rx_tagName, '') || 'div';\n};\n\nyr.closeAttrs = function closeAttrs(a) {\n    var name = a.s;\n\n    if (name) {\n        var r = '';\n        var attrs = a.a;\n\n        for (var attr in attrs) {\n            r += ' ' + attr + '=\"' + attrs[attr].quote() + '\"';\n        }\n        /*\n        for (var attr in attrs) {\n            if ( attrs.hasOwnProperty(attr) ) {\n                var v = attrs[attr];\n                if (v.quote) {\n                    r += ' ' + attr + '=\"' + v.quote() + '\"';\n                } else {\n                    yr.log({\n                        id: 'NO_QUOTE',\n                        message: \"Attr doesn't have quote() method\",\n                        data: {\n                            key: attr,\n                            value: v\n                        }\n                    });\n                }\n            } else {\n                yr.log({\n                    id: 'BAD_PROTOTYPE',\n                    message: 'Object prototype is corrupted',\n                    data: {\n                        key: attr,\n                        value: v\n                    }\n                });\n            }\n        }\n        */\n        r += ( yr.isShort(name) ) ? '/>' : '>';\n        a.s = null;\n\n        return r;\n    }\n\n    return '';\n};\n\nyr.copyAttrs = function copyAttrs(to, from) {\n    for (var key in from) {\n        to[key] = from[key];\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.scalarAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.scalarAttr.prototype.quote = function() {\n    return yr.text2attr(this.s);\n};\n\nfunction quoteAmp(s) {\n    return s.replace(/&/g, '&amp;');\n}\n\nyr.scalarAttr.prototype.addxml = function(xml) {\n    return new yr.xmlAttr( quoteAmp(this.s) + xml );\n};\n\nyr.scalarAttr.prototype.addscalar = function(xml) {\n    return new yr.scalarAttr( this.s + xml );\n};\n\nyr.xmlAttr = function(s) {\n    //  NOTE: См. коммент про Safari выше.\n\n    this.s = (s == null) ? '' : ('' + s);\n};\n\nyr.xmlAttr.prototype.quote = function() {\n    return yr.xml2attr(this.s);\n};\n\nyr.xmlAttr.prototype.addscalar = function(scalar) {\n    return new yr.xmlAttr( this.s + quoteAmp(scalar) );\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.slice = function(s, from, to) {\n    //  NOTE: См. коммент про Safari выше.\n\n    s = '' + s;\n    return (to) ? s.slice(from, to) : s.slice(from);\n};\n\nyr.exists = function(nodeset) {\n    return nodeset.length > 0;\n};\n\nyr.grep = function(nodeset, predicate) {\n    var r = [];\n    for (var index = 0, count = nodeset.length; index < count; index++) {\n        var node = nodeset[index];\n        if (predicate(node, index, count)) {\n            r.push(node);\n        }\n    }\n    return r;\n};\n\nyr.byIndex = function(nodeset, i) {\n    return nodeset.slice(i, i + 1);\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.sort = function(nodes, by, desc) {\n    var values = [];\n    for (var i = 0, l = nodes.length; i < l; i++) {\n        var node = nodes[i];\n        var value = by(node, i, l);\n        values.push({\n            node: node,\n            value: value\n        });\n    }\n\n    var greater = (desc) ? -1 : +1;\n    var less = (desc) ? +1 : -1;\n\n    var sorted = values.sort(function(a, b) {\n        var va = a.value;\n        var vb = b.value;\n        if (va < vb) { return less; }\n        if (va > vb) { return greater; }\n        return 0;\n    });\n\n    var r = [];\n    for (var i = 0, l = sorted.length; i < l; i++) {\n        r.push( sorted[i].node );\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.nodeset2data = function(nodes) {\n    var l = nodes.length;\n    if (l === 0) {\n        return '';\n    }\n\n    if (l === 1) {\n        return nodes[0].data;\n    }\n\n    var data = [];\n    for (var i = 0; i < l; i++) {\n        data.push( nodes[i].data );\n    }\n\n    return data;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nyr.externals = {};\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  Module\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\nvar Module = function() {};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex applyValue.\nModule.prototype.a = function applyValue(M, start, nodeset, mode, a0) {\n    var r = '';\n\n    //  Достаем аргументы, переданные в apply, если они там есть.\n    var args;\n    if (arguments.length > 5) {\n        args = Array.prototype.slice.call(arguments, 5);\n    }\n\n    var imports = M.imports;\n\n    //  Идем по нодесету.\n    for (var i0 = 0, l0 = nodeset.length; i0 < l0; i0++) {\n        var c0 = nodeset[i0];\n\n        //  Для каждой ноды ищем подходящий шаблон.\n        //  Сперва ищем в текущем модуле ( imports[0] ),\n        //  затем идем далее по списку импортов.\n\n        //  Если мы найдем шаблон, в found будет его id, а в module -- модуль,\n        //  в котором находится этот шаблон.\n        var found = false;\n        var module;\n\n        var i2 = start;\n        var l2 = imports.length;\n        var template;\n        while (!found && i2 < l2) {\n            module = imports[i2++];\n\n            //  matcher представляем собой двухуровневый объект,\n            //  на первом уровне ключами являются моды,\n            //  на втором -- имена нод.\n            //  Значения на втором уровне -- список id-шников шаблонов.\n            var names = module.matcher[mode];\n\n            if (names) {\n                //  FIXME: Тут неправильно. Если шаблоны для c0.name будут,\n                //  но ни один из них не подойдет, то шаблоны для '*' не применятся вообще.\n                //  FIXME: Плюс шаблоны на '*' всегда имеют более низкий приоритет.\n                var templates = names[c0.name] || names['*'];\n                if (templates) {\n                    var i3 = 0;\n                    var l3 = templates.length;\n                    while (!found && i3 < l3) {\n                        var tid = templates[i3++];\n                        template = module[tid];\n\n                        var selector = template.j;\n                        if (selector) {\n                            //  В template.j лежит id селектора (jpath'а).\n                            //  В tempalte.a флаг о том, является ли jpath абсолютным.\n                            if ( module.matched(selector, template.a, c0, i0, l0) ) {\n                                found = tid;\n                            }\n                        } else {\n                            var selectors = template.s;\n                            var abs = template.a;\n                            //  В template.s лежит массив с id-шниками селекторов.\n                            for (var i4 = 0, l4 = selectors.length; i4 < l4; i4++) {\n                                if ( module.matched(selectors[i4], abs[i4], c0, i0, l0) ) {\n                                    found = tid;\n                                    break;\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n\n        if (found) {\n            //  Шаблон нашли, применяем его.\n            if (args) {\n                //  Шаблон позвали с параметрами, приходится изгаляться.\n                r += template.apply( M, [M, c0, i0, l0, a0].concat(args) );\n            } else {\n                r += template(M, c0, i0, l0, a0);\n            }\n        }\n    }\n\n    return r;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.matched = function matched(jpath, abs, c0, i0, l0) {\n    if (jpath === 1) {\n        //  Это jpath '/'\n        return !c0.parent;\n    }\n\n    var l = jpath.length;\n    //  i (и l) всегда будет четное.\n    var i = l - 2;\n    while (i >= 0) {\n        if (!c0) { return false; }\n\n        var step = jpath[i];\n        //  Тут step может быть либо 0 (nametest), либо 2 (predicate).\n        //  Варианты 1 (dots) и 3 (index) в jpath'ах в селекторах запрещены.\n        switch (step) {\n            case 0:\n                //  Nametest.\n                var name = jpath[i + 1];\n                if (name !== '*' && name !== c0.name) { return false; }\n                c0 = c0.parent;\n                break;\n\n            case 2:\n            case 4:\n                //  Predicate or guard.\n                var predicate = jpath[i + 1];\n                if ( !predicate(this, c0, i0, l0) ) { return false; }\n                break;\n        }\n\n        i -= 2;\n    }\n\n    if (abs && c0.parent) {\n        return false;\n    }\n\n    return true;\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: ex selectN.\nModule.prototype.s = function selectN(jpath, node) {\n    return this.n( jpath, [ node ] );\n};\n\n//  NOTE: ex selectNs.\nModule.prototype.n = function selectNs(jpath, nodeset) {\n\n    var current = nodeset;\n    var m = current.length;\n\n    var result;\n    for (var i = 0, n = jpath.length; i < n; i += 2) {\n        result = [];\n\n        var type = jpath[i];\n        var step = jpath[i + 1];\n\n        switch (type) {\n\n            case 0: // Это nametest (.foo или .*), в step 'foo' или '*'.\n                for (var j = 0; j < m; j++) {\n                    yr.selectNametest(step, current[j], result);\n                }\n                break;\n\n            case 1: // Это dots (., .., ...), в step количество шагов минус один ( . -- 0, .. -- 1, ... -- 2 и т.д. ).\n                for (var j = 0; j < m; j++) {\n                    var k = 0;\n                    var node = current[j];\n                    while (k < step && node) {\n                        node = node.parent;\n                        k++;\n                    }\n                    if (node) {\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 2: // Это filter, в step предикат.\n                for (var j = 0; j < m; j++) {\n                    var node = current[j];\n                    if (step(this, node, j, m)) { // Предикат принимает четыре параметра: module, node, index и count.\n                        result.push(node);\n                    }\n                }\n                break;\n\n            case 3: // Это index, в step индекс нужного элемента.\n                var node = current[ step ];\n                result = (node) ? [ node ] : [];\n                break;\n\n            case 4:\n                //  Это глобальный гвард.\n                if (m > 0) {\n                    var node = current[0];\n                    if ( step(this, node.doc.root, 0, 1) ) {\n                        result = result.concat(current);\n                    }\n                }\n\n        }\n\n        current = result;\n        m = current.length;\n\n        if (!m) { return []; }\n    }\n\n    return result;\n};\n\nyr.selectNametest = function selectNametest(step, context, result) {\n\n    var data = context.data;\n\n    if (!data || typeof data !== 'object') { return result; }\n\n    if (step === '*') {\n        if (Array.isArray(data)) {\n            for (var i = 0, l = data.length; i < l; i++) {\n                yr.selectNametest(i, context, result);\n            }\n        } else {\n            for (step in data) {\n                yr.selectNametest(step, context, result);\n            }\n        }\n        return result;\n    }\n\n    data = data[step];\n    if (data === undefined) { return result; }\n\n    var doc = context.doc;\n    if (Array.isArray(data)) {\n        for (var i = 0, l = data.length; i < l; i++) {\n            result.push({\n                data: data[i],\n                parent: context,\n                name: step,\n                //  FIXME: Не нравится мне этот doc.\n                doc: doc\n            });\n        }\n    } else {\n        result.push({\n            data: data,\n            parent: context,\n            name: step,\n            //  FIXME: Не нравится мне этот doc.\n            doc: doc\n        });\n    }\n\n    return result;\n};\n\nyr.document = function(nodeset) {\n    var doc;\n    if (!nodeset.length) {\n        doc = new Doc( {} );\n    } else {\n        doc = new Doc( nodeset[0].data );\n    }\n    return [ doc.root ];\n};\n\nyr.subnode = function(name, data, context) {\n    var doc = context.doc;\n\n    if (Array.isArray(data)) {\n        var nodeset = [];\n        for (var i = 0, l = data.length; i < l; i++) {\n            nodeset.push({\n                data: data[i],\n                name: name,\n                parent: context,\n                doc: doc\n            });\n        }\n        return nodeset;\n    }\n\n    return [\n        {\n            data: data,\n            name: name,\n            parent: context,\n            doc: doc\n        }\n    ];\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  Глобальные переменные у нас \"ленивые\" с кэшированием.\n//  В this[name] находится только лишь функция,\n//  вычисляющая нужное значение.\n//\n//  NOTE: ex vars\nModule.prototype.v = function vars(id, c0) {\n    var vars = c0.doc._vars;\n    var value = vars[id];\n    if (value === undefined) {\n        var var_ = this.findSymbol(id);\n        value = (typeof var_ === 'function') ? var_(this, c0, 0, 1) : var_;\n        vars[id] = value;\n    }\n    return value;\n};\n\n//  FIXME: Тут еще бывает a0, а иногда не бывает.\n//\n//  NOTE: ex funcs\nModule.prototype.f = function funcs(id, c0, i0, l0, v0) {\n    var func = this.findSymbol(id);\n\n    if (arguments.length > 5) {\n        //  Два и более аргументов.\n        var args = Array.prototype.slice.call(arguments);\n        args[0] = this;\n        return func.apply(this, args);\n    }\n\n    if (v0 !== undefined) {\n        //  Один аргумент.\n        return func(this, c0, i0, l0, v0);\n    }\n\n    //  Без аргументов.\n    return func(this, c0, i0, l0);\n};\n\n//  NOTE: ex keys.\nModule.prototype.k = function keys(id, use, c0, multiple) {\n    var keys = c0.doc._keys;\n\n    var key = this.findSymbol(id);\n\n    var cache = keys[id];\n    if (!cache) {\n        cache = this._initKey(key, id, use, c0);\n    }\n\n    var values = cache.values;\n    var nodes = cache.nodes;\n\n    var that = this;\n\n    if (multiple) {\n        //  В use -- нодесет.\n        var r;\n\n        if (cache.xml) {\n            r = '';\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r += getValue( yr.nodeValue(c0) );\n            }\n        } else {\n            r = [];\n            for (var i = 0, l = use.length; i < l; i++) {\n                var c0 = use[i];\n                r = r.concat( getValue( yr.nodeValue(c0) ) );\n            }\n        }\n\n        return r;\n\n    } else {\n        //  В use -- скаляр.\n        var value = values[use];\n        if (value === undefined) {\n            value = getValue(use);\n        }\n\n        return value;\n\n    }\n\n    function getValue(use) {\n        var nodes_ = nodes[use];\n\n        var r;\n        if (cache.xml) {\n            r = '';\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    //  FIXME: Нельзя ли тут последний параметр сделать общим,\n                    //  а не создавать его для каждого элемента цикла?\n                    r += key.b( that, node.c, node.i, node.l, {} );\n                }\n            }\n        } else {\n            r = [];\n            if (nodes_) {\n                for (var i = 0, l = nodes_.length; i < l; i++) {\n                    var node = nodes_[i];\n                    r = r.concat( key.b(that, node.c, node.i, node.l) );\n                }\n            }\n        }\n\n        values[use] = r;\n\n        return r;\n    }\n\n};\n\nModule.prototype._initKey = function(key, id, use, c0) {\n    var keys = c0.doc._keys;\n    var cache = keys[id] = {};\n\n    //  Тело ключ имеет тип xml.\n    cache.xml = (key.bt === 'xml');\n\n    //  Вычисляем нодесет с нодами, которые матчатся ключом.\n    var matched = key.n(this, c0);\n    //  Хранилище для этих нод.\n    var nodes = cache.nodes = {};\n\n    //  Значение use ключа может возвращать нодесет или скаляр.\n    if (key.ut === 'nodeset') {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            for (var j = 0, m = use_.length; j < m; j++) {\n                store( yr.nodeValue( use_[j] ), { c: c1, i: i0, l: l0 } );\n            }\n        }\n\n    } else {\n        for (var i0 = 0, l0 = matched.length; i0 < l0; i0++) {\n            var c1 = matched[i0];\n            //  Тип use_ -- nodeset.\n            var use_ = key.u(this, c1, i0, l0);\n\n            store( use_, { c: c1, i: i0, l: l0 } );\n        }\n\n    }\n\n    //  Хранилище для уже вычисленных значений ключа.\n    cache.values = {};\n\n    return cache;\n\n    //  Сохраняем ноду по соответствующему ключу.\n    //  Одному ключу может соответствовать несколько нод.\n    function store(key, info) {\n        var items = nodes[key];\n        if (!items) {\n            items = nodes[key] = [];\n        }\n        items.push(info);\n    }\n\n\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nModule.prototype.findSymbol = function(id) {\n    var imports = this.imports;\n    for (var i = 0, l = imports.length; i < l; i++) {\n        var module = imports[i];\n        var symbol = module[id];\n        if (symbol !== undefined) { return symbol; }\n    }\n};\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nfunction Doc(data, nodeName) {\n    //  FIXME: Что тут использовать? Array.isArray?\n    if (Array.isArray(data)) {\n        data = {\n            //  FIXME: Сделать название поля ('item') настраеваемым.\n            'item': data\n        };\n    }\n\n    this.root = {\n        data: data,\n        parent: null,\n        name: nodeName || '',\n        doc: this\n    };\n\n    this._vars = {};\n    this._keys = {};\n}\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n\n\n\n\n\nyr.Module = Module;\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n})();\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\n//  NOTE: Для использования из node.js.\n//  При этом недостаточно просто проверить window/document.\n//  Потому что в тестах runtime грузится не как модуль (пока что, надеюсь),\n//  но просто эвалится, поэтому в нем module не определен.\n//\n\nif (typeof module !== 'undefined') {\n    module.exports = yr;\n}\n\n";
 
     // Добавляем внешние функции, если есть.
     if (ext_content) {
@@ -205,7 +211,7 @@ module.exports = yate;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./factory.js":6,"./grammar.js":7,"./yate.js":12,"fs":13,"parse-tools":26,"vm":16}],2:[function(require,module,exports){
+},{"./factory.js":6,"./grammar.js":7,"./yate.js":12,"fs":13,"parse-tools":24,"vm":34}],2:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var no = require('nommon');
@@ -240,7 +246,9 @@ yate.AST.prototype.state = {
     //  Функции.
     fid: 0,
     //  Ключи.
-    kid: 0
+    kid: 0,
+    //  id для переменных под динамическое значение тега.
+    xid: 0
 
 };
 
@@ -299,6 +307,10 @@ yate.AST.prototype.isConst = no.false;
 
 yate.AST.prototype.isGlobal = function() {
     return !this.scope.parent;
+};
+
+yate.AST.prototype.isLocal = function() {
+    throw "No isLocal in " + this.id;
 };
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -363,6 +375,7 @@ yate.AST.prototype.w_deinclude = no.nop;
 yate.AST.prototype.w_deimport = no.nop;
 yate.AST.prototype.w_deitemize = no.nop;
 
+yate.AST.prototype.w_declarations = no.nop;
 yate.AST.prototype.w_action = no.nop;
 yate.AST.prototype.w_list = no.nop;
 yate.AST.prototype.w_validate = no.nop;
@@ -377,7 +390,7 @@ yate.AST.prototype.setPrevOpened = no.nop;
 
 var fs = require('fs');
 
-yate.AST.js = new pt.Codegen( 'js', "// vim: set filetype=javascript:\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// module\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// На первое время, шаблоны (и соответственно matcher) выводятся только на верхнем уровне.\n\nmodule\n    var yr = yr || require('yate/lib/runtime.js');\n\n    (function() {\n\n        var cmpNN = yr.cmpNN;\n        var cmpSN = yr.cmpSN;\n        var nodeset2xml = yr.nodeset2xml;\n        var nodeset2boolean = yr.nodeset2boolean;\n        var nodeset2attrvalue = yr.nodeset2attrvalue;\n        var nodeset2scalar = yr.nodeset2scalar;\n        var scalar2attrvalue = yr.scalar2attrvalue;\n        var xml2attrvalue = yr.xml2attrvalue;\n        var scalar2xml = yr.scalar2xml;\n        var xml2scalar = yr.xml2scalar;\n        var simpleScalar = yr.simpleScalar;\n        var simpleBoolean = yr.simpleBoolean;\n        var selectNametest = yr.selectNametest;\n        var closeAttrs = yr.closeAttrs;\n\n        var M = new yr.Module();\n\n        %{ Block.js__defs() }\n\n        %{ Block.Templates :defs }\n\n        M.matcher = %{ Block.js__matcher() };\n        M.imports = %{ Block.Imports };\n\n        yr.register('%{ . :name }', M);\n\n    })();\n\nmodule :name [ p.Name ]\n\n    %{ Name }\n\n//  Дефольтное название модуля.\nmodule :name\n\n    main\n\nimport\n\n    '%{ Name }'\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// defs: template, function_, key, var_\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// template.\n\ntemplate :defs\n\n    // match %{ Selectors :yate } %{ Mode }\n    M.t%{ Id } = %{ . :def };\n    %{ . :selectors }\n\ntemplate :def\n    function t%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }, a%{ Rid }%{ Args }) {\n        %{ Args :defaults }\n        %{ . :template_prologue }\n\n        %{ Body :output }\n\n        return r%{ Rid };\n    }\n\ntemplate_mode [ p.Value ]\n\n    : %{ Value }\n\ntemplate :selectors [ p.Selectors.length() === 1 ]\n\n    M.t%{ Id }.j = %{ Selectors :template_selector };\n    M.t%{ Id }.a = %{ Selectors :template_abs };\n\ntemplate :selectors\n\n    M.t%{ Id }.s = [ %{ Selectors :template_selector } ];\n    M.t%{ Id }.a = [ %{ Selectors :template_abs } ];\n\ntemplate :template_prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n\ntemplate :template_prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n\ntemplate :template_prologue\n\n    var r%{ Rid } = '';\n\n\n// Для jpath выводим имя его переменной, для / -- 1.\n\njpath :template_selector [ a.isRoot() ]\n\n    1\n\njpath :template_selector\n\n    j%{ Id }\n\njpath :template_abs [ p.Abs ]\n\n    1\n\njpath :template_abs\n\n    0\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfunction_ :comment\n\n    func %{ Name }(%{ Args :yate }) : %{ getType() }\n\nfunction_ :defs [ f.isImported ]\n\n    // imported %{ . :comment }\n\n// function_\n\nfunction_ :defs [ a.isGlobal() ]\n\n    // %{ . :comment }\n    M.f%{ Id } = %{ . :def };\n\nfunction_ :defs\n\n    %{ . :def }\n\n\n//  Только функции с типом attr или xml используют параметр aN.\nfunction_ :def [ a.getType() === 'attr' || a.getType() === 'xml' ]\n\n    function f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }, a%{ Rid }%{ Args }) {\n        %{ . :function_body }\n    }\n\nfunction_ :def\n\n    function f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }%{ Args }) {\n        %{ . :function_body }\n    }\n\n//  Тело функции состоит из одного инлайнового выражения (без каких-либо определений).\n* :function_body [ p.Body.inline() ]\n    %{ Args :defaults }\n\n    return %{ Body };\n\n* :function_body\n\n    %{ Args :defaults }\n    %{ . :function_prologue }\n\n    %{ Body :output }\n\n    %{ . :function_epilogue }\n\n\n* :function_prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n\n* :function_prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n\n* :function_prologue [ a.getType() === 'nodeset' ]\n\n    var r%{ Rid } = [];\n\n* :function_prologue [ a.getType() === 'boolean' ]\n\n    var r%{ Rid } = false;\n\n//  Функция типа attr не использует переменную rN.\n* :function_prologue [ a.getType() !== 'attr' ]\n\n    var r%{ Rid } = '';\n\n\n* :function_epilogue [ a.getType() === 'attr' ]\n\n    return a%{ Rid }.a;\n\n* :function_epilogue\n\n    return r%{ Rid };\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  var_\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :body\n\n    %{ Value :prologue }\n    %{ Value :output }\n    %{ . :epilogue }\n\nvar_ :comment\n\n    var %{ Name } : %{ Value.getType() }\n\n\n//  Глобальная переменная.\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :defs [ f.isImported ]\n\n    //  imported %{ . :comment }\n\nvar_ :defs [ a.isGlobal() ]\n\n    //  %{ . :comment }\n    M.v%{ Id } = %{ . :global };\n\nvar_ :global [ p.Value.isConst() ]\n\n    %{ Value }\n\nvar_ :global [ p.Value.inline() ]\n\n    function(m, c0, i0, l0) {\n        return %{ Value };\n    }\n\nvar_ :global\n\n    function(m, c0, i0, l0) {\n        %{ . :body }\n    }\n\nvar_ :epilogue [ a.isGlobal() && p.Value.getType() === 'attr' ]\n\n    return a%{ Value.Rid }.a;\n\nvar_ :epilogue [ a.isGlobal() ]\n\n    return r%{ Value.Rid };\n\n\n//  Локальная переменная\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :defs [ p.Value.inline() ]\n\n    //  %{ . :comment }\n    var v%{ Id } = %{ Value };\n\nvar_ :defs\n\n    //  %{ . :comment }\n    %{ . :body }\n\nvar_ :epilogue [ p.Value.getType() === 'attr' ]\n\n    var v%{ Id } = a%{ Value.Rid }.a;\n\nvar_ :epilogue\n\n    var v%{ Id } = r%{ Value.Rid };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nkey :defs [ f.isImported ]\n\n    //  imported key %{ Name }()\n\nkey :defs\n\n    M.k%{ Id } = {};\n    M.k%{ Id }.n = %{ . :nodes };\n    //  %{ Use.getType() }\n    M.k%{ Id }.u = %{ . :use };\n    //  %{ Body.getType() }\n    M.k%{ Id }.b = %{ . :body };\n    %{ . :types }\n\nkey :nodes\n\n    function k%{ Id }n(m, c0, i0, l0) {\n        return %{ Nodes };\n    }\n\nkey :use\n\n    function k%{ Id }u(m, c0, i0, l0) {\n        return %{ Use };\n    }\n\nkey :body\n\n    function k%{ Id }b(m, c0, i0, l0, a0) {\n        %{ . :function_body }\n    }\n\nkey :types\n\n    M.k%{ Id }.ut = '%{ Use.getType() }';\n    M.k%{ Id }.bt = '%{ Body.getType() }';\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n//  jpath\n\njpath :defs\n    var j%{ Id } = %{ . :def };\n\njpath :def\n\n    [ %{ Steps } ]\n\njpath_nametest\n\n    0, '%{ Name }'\n\njpath_dots\n\n    1, %{ Length }\n\njpath_predicate [ a.isLocal() ]\n\n    2, p%{ Id }\n\njpath_predicate [ p.Expr.getType() === 'boolean' ]\n\n    4, p%{ Id }\n\njpath_predicate\n\n    3, %{ Expr }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n//  jpath_predicate\n\njpath_predicate :defs\n//  FIXME\n//  [ this.isLocal() || this.Expr.getType() === 'nodeset' ]\n\n    function p%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }) {\n        return %{ Expr };\n    }\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// block and body\n// ----------------------------------------------------------------------------------------------------------------- //\n\nbody [ f.AsList ]\n\n    %{ Block :listitem ]\n\nbody\n\n    %{ Block }\n\nbody :output\n\n    %{ Block :output }\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nblock :output [ f.AsList ]\n\n    %{ . :listitem }\n\nblock\n\n    %{ js__defs() }\n\n    %{ Exprs }\n\nblock :output\n\n    %{ js__defs() }\n\n    %{ Exprs :output }\n\nblock :listitem\n\n    %{ js__defs() }\n\n    %{ Exprs :listitem }\n\n* :prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n    var a%{ Rid } = { a: {} };\n\n* :prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n    var a%{ Rid } = { a: {} };\n\n* :prologue [ a.getType() === 'nodeset' ]\n\n    var r%{ Rid } = [];\n\n* :prologue [ a.getType() === 'boolean' ]\n\n    var r%{ Rid } = false;\n\n* :prologue\n\n    var r%{ Rid } = '';\n    var a%{ Rid } = { a: {} };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// block expressions\n// ----------------------------------------------------------------------------------------------------------------- //\n\nif_ :listitem\n\n    %{ . :output }\n\nif_ :output\n\n    if (%{ Condition }) %{ Then :if_body } %{ Elses }\n\n* :if_body\n\n    {\n        %{ . :output }\n    }\n\nelse_if\n\n    else if (%{ Condition }) %{ Body :if_body }\n\nelse_\n\n    else %{ Body :if_body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfor_ :listitem\n\n    %{ . :output }\n\nfor_ :output\n\n    var items%{ Cid } = %{ Selector };\n    for (var i%{ Body.Cid } = 0, l%{ Body.Cid } = items%{ Cid }.length; i%{ Body.Cid } < l%{ Body.Cid }; i%{ Body.Cid }++) {\n        var c%{ Body.Cid } = items%{ Cid }[ i%{ Body.Cid } ];\n        %{ Body :output }\n    }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\napply :output\n\n    %{ . :output-prologue }\n    r%{ Rid } += %{ . :output-value }\n\napply :listitem\n\n    %{ . :output-prologue }\n    r%{ Rid }.push(%{ . :output-value });\n\napply :output-prologue [ p.Expr.id === 'object' ]\n\n    var r%{ Expr.Rid } = {};\n    %{ Expr :output }\n\napply :output-value [ p.Expr.id === 'object' ]\n    m.a(m, yr.object2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-prologue [ p.Expr.id === 'array' ]\n\n    var r%{ Expr.Rid } = [];\n    %{ Expr :output }\n\napply :output-value [ p.Expr.id === 'array' ]\n    m.a(m, yr.array2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value [ p.Expr.getType() === 'object' ]\n\n    m.a(m, yr.object2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value [ p.Expr.getType() === 'array' ]\n\n    m.a(m, yr.array2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value\n\n    m.a(m, %{ Expr }, %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\ntemplate_mode :string\n\n    '%{ Value }'\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\ncdata :listitem\n\n    r%{ Rid }.push(%{ Value });\n\ncdata :output\n\n    r%{ Rid } += %{ Value };\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nxml_attr :open\n\n    '%{ Name }': new yr.scalarAttr(%{ Value })\n\nxml_line :output\n\n    r%{ Rid } += %{ . :content };\n\nxml_line :listitem\n\n    r%{ Rid }.push(%{ . :content });\n\nxml_line :content\n\n    %{ js__content() }\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// FIXME: Закэшировать a0.a в отдельную переменную.\nattr :output [ p.Value.inline() && p.Op === '+=' ]\n\n    var tmp%{ Cid } = a%{ Rid }.a[ %{ Name } ];\n    if (tmp%{ Cid }) {\n        a%{ Rid }.a[ %{ Name } ] = tmp%{ Cid }.add%{ AttrType }(%{ Value });\n    } else {\n        a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(%{ Value });\n    }\n\nattr :output [ p.Value.inline() ]\n    a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(%{ Value });\n\nattr :output [ p.Op === '+=' ]\n\n    %{ Value :prologue }\n    %{ Value :output }\n    var tmp%{ Cid } = a%{ Rid }.a[ %{ Name } ];\n    if (tmp%{ Cid }) {\n        a%{ Rid }.a[ %{ Name } ] = tmp%{ Cid }.add%{ AttrType }(r%{ Value.Rid });\n    } else {\n        a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(r%{ Value.Rid });\n    }\n\nattr :output\n\n    %{ Value :prologue }\n    %{ Value :output }\n    a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(r%{ Value.Rid });\n\nattrs_close :output\n    r%{ Rid } += closeAttrs(a%{ Rid });\n\nattrs_open :output\n\n    a%{ Rid }.a = {\n        %{ Attrs :open }\n    };\n    a%{ Rid }.s = '%{ Name }';\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nsubexpr :listitem\n\n    %{ Block :prologue }\n    %{ Block :output }\n    r%{ Rid }.push(r%{ Block.Rid });\n\nsubexpr :output\n\n    %{ Block :output }\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// Selectors: jpath\n// ----------------------------------------------------------------------------------------------------------------- //\n\njpath [ a.isRoot() ]\n\n    [ c%{ Cid }.doc.root ]\n\njpath [ a.isSelf() ]\n\n    [ c%{ Cid } ]\n\njpath [ f.IsSimple && p.AsType === 'scalar' ]\n\n    simpleScalar('%{ Name }', %{ . :context })\n\njpath [ f.IsSimple && p.AsType === 'boolean' ]\n\n    simpleBoolean('%{ Name }', %{ . :context })\n\njpath [ f.IsSimple ]\n\n    selectNametest('%{ Name }', %{ . :context }, [])\n\njpath\n\n    m.s(j%{ Id }, %{ . :context })\n\njpath :context [ p.Abs ]\n\n    c%{ Cid }.doc.root\n\njpath :context\n\n    c%{ Cid }\n\n// FIXME: Переименовать jpath_filter в inline_filter.\njpath_filter\n\n    m.n(j%{ JPath.Id }, %{ Expr })\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\narglist_item\n    , v%{ Id }\n\narglist_item :defaults [ p.Default ]\n    v%{ Id } = (v%{ Id } === undefined) ? %{ Default } : v%{ Id };\n\narglist_item :defaults [ p.Typedef === 'nodeset' ]\n    v%{ Id } = (v%{ Id } === undefined) ? [] : v%{ Id };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n//  value\n// ----------------------------------------------------------------------------------------------------------------- //\n\nvalue\n\n    %{ Value }\n\nvalue :listitem\n\n    r%{ Rid }.push(%{ Value });\n\nvalue :output [ ( a.getType() === 'nodeset' || a.getType() === 'boolean' ) && !p.AsType ]\n\n    r%{ Rid } = %{ Value };\n\nvalue :output [ a.getType() === 'attr' && p.Value.is('inline_var') ]\n\n    yr.copyAttrs( a%{ Rid }.a, %{ Value } );\n\nvalue :output [ a.getType() === 'attr' && p.Value.is('inline_function') && p.Value.def.is('external') ]\n\n    yr.copyAttrs( a%{ Rid }.a, %{ Value } );\n\n//  А тут всегда Value должно быть inline_function.\nvalue :output [ a.getType() === 'attr' ]\n\n    %{ Value };\n\nvalue :output\n\n    r%{ Rid } += %{ Value };\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  object\n//  ---------------------------------------------------------------------------------------------------------------  //\n\narray :listitem\n\n    %{ . :prologue }\n    %{ . :output }\n    r%{ ~.Rid }.push(r%{ Block.Rid });\n\narray :output\n\n    %{ Block :listitem }\n\nobject :listitem\n\n    %{ . :prologue }\n    %{ . :output }\n    r%{ ~.Rid }.push(r%{ Block.Rid });\n\nobject :output\n\n    %{ Block :output }\n\npair :output [ p.Value.inline() ]\n\n    r%{ Rid }[ %{ Key } ] = %{ Value };\n\npair :output\n\n    %{ Value :prologue }\n    %{ Value :output }\n    r%{ Rid }[ %{ Key } ] = r%{ Value.Rid };\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// inline expressions\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_or\n    %{ Left } || %{ Right }\n\ninline_and\n    %{ Left } && %{ Right }\n\ninline_not\n    !%{ Left }\n\ninline_eq [ p.Op === '!=' && ( p.Left.getType() === 'nodeset' || p.Right.getType() === 'nodeset' ) ]\n\n    !(%{ . :cmp })\n\ninline_eq\n\n    %{ . :cmp }\n\ninline_eq :cmp [ p.Left.getType() === 'nodeset' && p.Right.getType() === 'nodeset' ]\n\n    cmpNN(%{ Left }, %{ Right })\n\ninline_eq :cmp [ p.Left.getType() === 'nodeset' ]\n\n    cmpSN(%{ Right }, %{ Left })\n\ninline_eq :cmp [ p.Right.getType() === 'nodeset' ]\n\n    cmpSN(%{ Left }, %{ Right })\n\ninline_eq :cmp\n    %{ Left } %{ Op } %{ Right }\n\ninline_rel\n    %{ Left } %{ Op } %{ Right }\n\ninline_add\n    %{ Left } %{ Op } %{ Right }\n\ninline_mul\n    %{ Left } %{ Op } %{ Right }\n\ninline_unary\n    -%{ Left }\n\ninline_union\n    (%{ Left }).concat(%{ Right })\n\ninline_subexpr\n    (%{ Expr })\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_function [ f.IsExternal ]\n    (yr.externals['%{ Name }'])(%{ Args })\n\n//  FIXME: Положить в какой-нибудь флаг инфу о том, что аргументом ключа является нодесет.\ninline_function [ f.IsKey && p.Args.first().getType() === 'nodeset' ]\n    m.k('k%{ Id }', %{ Args }, c%{ Cid }.doc.root, true)\n\ninline_function [ f.IsKey ]\n    m.k('k%{ Id }', %{ Args }, c%{ Cid }.doc.root)\n\ninline_function [ f.IsUser && a.def.isGlobal() ]\n    m.f('f%{ Id }', c%{ Cid }, i%{ Cid }, l%{ Cid }%{ . :attrs }%{ Args :comma })\n\ninline_function [ f.IsUser ]\n    f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }%{ . :attrs }%{ Args :comma })\n\n//  Этот вызов функции сохраняется в переменную, а не просто используется.\n//  Поэтому мы передаем вместо aN новый пустой объект для атрибутов.\ninline_function :attrs [ a.getType() === 'attr' && f.InlineVarValue ]\n\n    , { a: {} }\n\ninline_function :attrs [ a.getType() === 'attr' || a.getType() === 'xml' ]\n\n    , a%{ Rid }\n\n//  Все остальное -- это встроенные функции, для них есть индивидуальные шаблоны ниже.\n//  js__internal() вызывает соответствующий шаблон.\ninline_function\n    %{ js__internal() }\n\ncallargs :comma [ !a.empty() ]\n    , %{ . }\n\ncallarg [ p.AsType === 'nodeset' && p.Expr.id === 'object' ]\n    yr.object2nodeset(%{ . :object })\n\ncallarg [ p.AsType === 'nodeset' && p.Expr.id === 'array' ]\n    yr.array2nodeset(%{ . :object })\n\ncallarg [ p.Expr.id === 'object' || p.Expr.id === 'array' ]\n    %{ . :object }\n\ncallarg :object\n    (function() {\n        %{ Expr :prologue }\n        %{ Expr :output }\n\n        return r%{ Expr.Rid };\n    })()\n\ncallarg\n\n    %{ Expr }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninternal_function_true\n    true\n\ninternal_function_false\n    false\n\ninternal_function_name [ p.Signature === 'nodeset' ]\n    yr.nodeName( %{Args} )\n\ninternal_function_name\n    c%{ Cid }.name\n\ninternal_function_index\n    i%{ Cid }\n\ninternal_function_count [ p.Signature === 'nodeset' ]\n    ( %{Args} ).length\n\ninternal_function_count\n    l%{ Cid }\n\ninternal_function_slice\n    yr.slice(%{ Args })\n\ninternal_function_html\n    %{ Args }\n\ninternal_function_exists\n    yr.exists(%{ Args })\n\ninternal_function_number\n    (+(%{ Args }))\n\ninternal_function_string [ p.Signature === 'nodeset' ]\n    ('' + yr.nodeset2scalar(%{ Args }))\n\ninternal_function_string\n    ('' + %{ Args })\n\ninternal_function_scalar\n    %{ Args }\n\ninternal_function_boolean\n    %{ Args }\n\ninternal_function_log\n    (console.log(%{ Args }),'')\n\ninternal_function_document\n    yr.document(%{ Args })\n\ninternal_function_subnode\n    yr.subnode(%{ Args }, c%{ Cid })\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_var [ a.def.isGlobal() ]\n\n    m.v('v%{ Id }', c%{ Cid }.doc.root)\n\ninline_var\n    v%{ Id }\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\ninline_number\n    %{ Value }\n\ninline_string\n    %{ Value }\n\nstring_expr\n    ( %{ Expr } )\n\nstring_literal\n    %{ stringify() }\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// cast and quote\n// ----------------------------------------------------------------------------------------------------------------- //\n\ncast [ p.From === 'nodeset' && p.To === 'data' ]\n    yr.nodeset2data(%{ Expr })\n\ncast [ p.From === 'nodeset' && (p.To === 'scalar' || p.To === 'xml' || p.To === 'attrvalue' || p.To === 'boolean') ]\n    nodeset2%{ To }( %{ Expr } )\n\ncast [ p.From === 'scalar' && (p.To === 'xml' || p.To == 'attrvalue') ]\n    scalar2%{ To }( %{ Expr } )\n\ncast [ p.From === 'xml' && p.To == 'attrvalue' ]\n    xml2attrvalue( %{ Expr } )\n\ncast [ p.From === 'xml' && p.To == 'scalar' ]\n    xml2scalar( %{ Expr } )\n\ncast [ p.From === 'object' && p.To == 'nodeset' ]\n    yr.object2nodeset( %{ Expr } )\n\ncast [ p.From === 'array' && p.To == 'nodeset' ]\n    yr.array2nodeset( %{ Expr } )\n\n// FIXME: Не бывает ли ситуации, когда таки нужно нетривиально приводить scalar к boolean?\ncast [ p.From === 'scalar' && p.To === 'boolean' ]\n    %{ Expr }\n\ncast\n    %{ Expr }\n\nquote\n    yr.%{ Mode }Quote(%{ Expr })\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nsort [ p.Order === 'desc' ]\n\n    yr.sort(%{ Nodes }, function(c%{ Cid }, i%{ Cid }, l%{ Cid }) { return %{ By }; }, true)\n\nsort\n\n    yr.sort(%{ Nodes }, function(c%{ Cid }, i%{ Cid }, l%{ Cid }) { return %{ By }; })\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// misc\n// ----------------------------------------------------------------------------------------------------------------- //\n\n* :yate\n    %{ yate() }\n\n\n");
+yate.AST.js = new pt.Codegen( 'js', "// vim: set filetype=javascript:\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// module\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// На первое время, шаблоны (и соответственно matcher) выводятся только на верхнем уровне.\n\nmodule\n    var yr = yr || require('yate/lib/runtime.js');\n\n    (function() {\n\n        var cmpNN = yr.cmpNN;\n        var cmpSN = yr.cmpSN;\n        var nodeset2xml = yr.nodeset2xml;\n        var nodeset2boolean = yr.nodeset2boolean;\n        var nodeset2attrvalue = yr.nodeset2attrvalue;\n        var nodeset2scalar = yr.nodeset2scalar;\n        var scalar2attrvalue = yr.scalar2attrvalue;\n        var xml2attrvalue = yr.xml2attrvalue;\n        var scalar2xml = yr.scalar2xml;\n        var xml2scalar = yr.xml2scalar;\n        var simpleScalar = yr.simpleScalar;\n        var simpleBoolean = yr.simpleBoolean;\n        var selectNametest = yr.selectNametest;\n        var closeAttrs = yr.closeAttrs;\n        var tagName = yr.tagName;\n        var isShort = yr.isShort;\n\n        var M = new yr.Module();\n\n        %{ Block.js__defs() }\n\n        %{ Block.Templates :defs }\n\n        M.matcher = %{ Block.js__matcher() };\n        M.imports = %{ Block.Imports };\n\n        yr.register('%{ . :name }', M);\n\n    })();\n\nmodule :name [ p.Name ]\n\n    %{ Name }\n\n//  Дефольтное название модуля.\nmodule :name\n\n    main\n\nimport\n\n    '%{ Name }'\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// defs: template, function_, key, var_\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// template.\n\ntemplate :defs\n\n    // match %{ Selectors :yate } %{ Mode }\n    M.t%{ Id } = %{ . :def };\n    %{ . :selectors }\n\ntemplate :def\n    function t%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }, a%{ Rid }%{ Args }) {\n        %{ Args :defaults }\n        %{ . :template_prologue }\n        var current = [ c%{ Cid } ];\n\n        %{ Body :output }\n\n        return r%{ Rid };\n    }\n\ntemplate_mode [ p.Value ]\n\n    : %{ Value }\n\ntemplate :selectors [ p.Selectors.length() === 1 ]\n\n    M.t%{ Id }.j = %{ Selectors :template_selector };\n    M.t%{ Id }.a = %{ Selectors :template_abs };\n\ntemplate :selectors\n\n    M.t%{ Id }.s = [ %{ Selectors :template_selector } ];\n    M.t%{ Id }.a = [ %{ Selectors :template_abs } ];\n\ntemplate :template_prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n\ntemplate :template_prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n\ntemplate :template_prologue\n\n    var r%{ Rid } = '';\n\n\n// Для jpath выводим имя его переменной, для / -- 1.\n\njpath :template_selector [ a.isRoot() ]\n\n    1\n\njpath :template_selector\n\n    j%{ Id }\n\njpath :template_abs [ p.Abs ]\n\n    1\n\njpath :template_abs\n\n    0\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfunction_ :comment\n\n    func %{ Name }(%{ Args :yate }) : %{ getType() }\n\nfunction_ :defs [ f.isImported ]\n\n    // imported %{ . :comment }\n\n// function_\n\nfunction_ :defs [ a.isGlobal() ]\n\n    // %{ . :comment }\n    M.f%{ Id } = %{ . :def };\n\nfunction_ :defs\n\n    %{ . :def }\n\n\n//  Только функции с типом attr или xml используют параметр aN.\nfunction_ :def [ a.getType() === 'attr' || a.getType() === 'xml' ]\n\n    function f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }, a%{ Rid }%{ Args }) {\n        %{ . :function_body }\n    }\n\nfunction_ :def\n\n    function f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }%{ Args }) {\n        %{ . :function_body }\n    }\n\n//  Тело функции состоит из одного инлайнового выражения (без каких-либо определений).\n* :function_body [ p.Body.inline() ]\n    %{ Args :defaults }\n\n    return %{ Body };\n\n* :function_body\n\n    %{ Args :defaults }\n    %{ . :function_prologue }\n\n    %{ Body :output }\n\n    %{ . :function_epilogue }\n\n\n* :function_prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n\n* :function_prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n\n* :function_prologue [ a.getType() === 'nodeset' ]\n\n    var r%{ Rid } = [];\n\n* :function_prologue [ a.getType() === 'boolean' ]\n\n    var r%{ Rid } = false;\n\n//  Функция типа attr не использует переменную rN.\n* :function_prologue [ a.getType() !== 'attr' ]\n\n    var r%{ Rid } = '';\n\n\n* :function_epilogue [ a.getType() === 'attr' ]\n\n    return a%{ Rid }.a;\n\n* :function_epilogue\n\n    return r%{ Rid };\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  var_\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :body\n\n    %{ Value :prologue }\n    %{ Value :output }\n    %{ . :epilogue }\n\nvar_ :comment\n\n    var %{ Name } : %{ Value.getType() }\n\n\n//  Глобальная переменная.\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :defs [ f.isImported ]\n\n    //  imported %{ . :comment }\n\nvar_ :defs [ a.isGlobal() ]\n\n    //  %{ . :comment }\n    M.v%{ Id } = %{ . :global };\n\nvar_ :global [ p.Value.isConst() ]\n\n    %{ Value }\n\nvar_ :global [ p.Value.inline() ]\n\n    function(m, c0, i0, l0) {\n        return %{ Value };\n    }\n\nvar_ :global\n\n    function(m, c0, i0, l0) {\n        %{ . :body }\n    }\n\nvar_ :epilogue [ a.isGlobal() && p.Value.getType() === 'attr' ]\n\n    return a%{ Value.Rid }.a;\n\nvar_ :epilogue [ a.isGlobal() ]\n\n    return r%{ Value.Rid };\n\n\n//  Локальная переменная\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nvar_ :defs [ p.Value.inline() ]\n\n    //  %{ . :comment }\n    var v%{ Id } = %{ Value };\n\nvar_ :defs\n\n    //  %{ . :comment }\n    %{ . :body }\n\nvar_ :epilogue [ p.Value.getType() === 'attr' ]\n\n    var v%{ Id } = a%{ Value.Rid }.a;\n\nvar_ :epilogue\n\n    var v%{ Id } = r%{ Value.Rid };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nkey :defs [ f.isImported ]\n\n    //  imported key %{ Name }()\n\nkey :defs\n\n    M.k%{ Id } = {};\n    M.k%{ Id }.n = %{ . :nodes };\n    //  %{ Use.getType() }\n    M.k%{ Id }.u = %{ . :use };\n    //  %{ Body.getType() }\n    M.k%{ Id }.b = %{ . :body };\n    %{ . :types }\n\nkey :nodes\n\n    function k%{ Id }n(m, c0, i0, l0) {\n        return %{ Nodes };\n    }\n\nkey :use\n\n    function k%{ Id }u(m, c0, i0, l0) {\n        return %{ Use };\n    }\n\nkey :body\n\n    function k%{ Id }b(m, c0, i0, l0, a0) {\n        %{ . :function_body }\n    }\n\nkey :types\n\n    M.k%{ Id }.ut = '%{ Use.getType() }';\n    M.k%{ Id }.bt = '%{ Body.getType() }';\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n//  jpath\n\njpath :defs\n    var j%{ Id } = %{ . :def };\n\njpath :def\n\n    [ %{ Steps } ]\n\njpath_nametest\n\n    0, '%{ Name }'\n\njpath_dots\n\n    1, %{ Length }\n\njpath_predicate [ a.isLocal() ]\n\n    2, p%{ Id }\n\njpath_predicate [ p.Expr.getType() === 'boolean' ]\n\n    4, p%{ Id }\n\njpath_predicate\n\n    3, %{ Expr }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n//  jpath_predicate\n\njpath_predicate :defs\n//  FIXME\n//  [ this.isLocal() || this.Expr.getType() === 'nodeset' ]\n\n    function p%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }) {\n        return %{ Expr };\n    }\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// block and body\n// ----------------------------------------------------------------------------------------------------------------- //\n\nbody [ f.AsList ]\n\n    %{ Block :listitem ]\n\nbody\n\n    %{ Block }\n\nbody :output\n\n    %{ Block :output }\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nblock :output [ f.AsList ]\n\n    %{ . :listitem }\n\nblock\n\n    %{ js__defs() }\n\n    %{ Exprs }\n\nblock :output\n\n    %{ js__defs() }\n\n    %{ Exprs :output }\n\nblock :listitem\n\n    %{ js__defs() }\n\n    %{ Exprs :listitem }\n\n* :prologue [ a.getType() === 'array' ]\n\n    var r%{ Rid } = [];\n    var a%{ Rid } = { a: {} };\n\n* :prologue [ a.getType() === 'object' ]\n\n    var r%{ Rid } = {};\n    var a%{ Rid } = { a: {} };\n\n* :prologue [ a.getType() === 'nodeset' ]\n\n    var r%{ Rid } = [];\n\n* :prologue [ a.getType() === 'boolean' ]\n\n    var r%{ Rid } = false;\n\n* :prologue\n\n    var r%{ Rid } = '';\n    var a%{ Rid } = { a: {} };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// block expressions\n// ----------------------------------------------------------------------------------------------------------------- //\n\nif_ :listitem\n\n    %{ . :output }\n\nif_ :output\n\n    if (%{ Condition }) %{ Then :if_body } %{ Elses }\n\n* :if_body\n\n    {\n        %{ . :output }\n    }\n\nelse_if\n\n    else if (%{ Condition }) %{ Body :if_body }\n\nelse_\n\n    else %{ Body :if_body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfor_ :listitem\n\n    %{ . :output }\n\nfor_ :output\n\n    var items%{ Cid } = %{ Selector };\n    for (var i%{ Body.Cid } = 0, l%{ Body.Cid } = items%{ Cid }.length; i%{ Body.Cid } < l%{ Body.Cid }; i%{ Body.Cid }++) {\n        var c%{ Body.Cid } = items%{ Cid }[ i%{ Body.Cid } ];\n        %{ Body :output }\n    }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\napply :output\n\n    %{ . :output-prologue }\n    r%{ Rid } += %{ . :output-value }\n\napply :listitem\n\n    %{ . :output-prologue }\n    r%{ Rid }.push(%{ . :output-value });\n\napply :output-prologue [ p.Expr.id === 'object' ]\n\n    var r%{ Expr.Rid } = {};\n    %{ Expr :output }\n\napply :output-value [ p.Expr.id === 'object' ]\n    m.a(m, %{ Start }, yr.object2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-prologue [ p.Expr.id === 'array' ]\n\n    var r%{ Expr.Rid } = [];\n    %{ Expr :output }\n\napply :output-value [ p.Expr.id === 'array' ]\n    m.a(m, %{ Start }, yr.array2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value [ p.Expr.getType() === 'object' ]\n\n    m.a(m, %{ Start }, yr.object2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value [ p.Expr.getType() === 'array' ]\n\n    m.a(m, %{ Start }, yr.array2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\napply :output-value\n\n    m.a(m, %{ Start }, %{ Expr }, %{ Mode :string }, a%{ Rid }%{ Args :comma })\n\ntemplate_mode :string\n\n    '%{ Value }'\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\ncdata :listitem\n\n    r%{ Rid }.push(%{ Value });\n\ncdata :output\n\n    r%{ Rid } += %{ Value };\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nxml_attr :open\n\n    '%{ Name }': new yr.scalarAttr(%{ Value })\n\nxml_line :output\n\n    %{ Names }\n    r%{ Rid } += %{ Items :content };\n\nxml_line :listitem\n\n    %{ Names }\n    r%{ Rid }.push(%{ Items :content });\n\nxml_items :content\n\n    %{ js__content() }\n\nxml_names [ !a.empty() ]\n    var %{ . :init };\n\nxml_name\n    xn%{ Xid }\n\nxml_name :init\n    xn%{ Xid } = tagName(%{ Expr })\n\nxml_start :open\n    xn%{ Xid }\n\nxml_start :open_close\n    ( isShort(xn%{ Xid }) ? '/>' : '>' )\n\nxml_end :close\n    ( isShort(xn%{ Xid }) ? '' : '</' + xn%{ Xid } + '>' )\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// FIXME: Закэшировать a0.a в отдельную переменную.\nattr :output [ p.Value.inline() && p.Op === '+=' ]\n\n    var tmp%{ Cid } = a%{ Rid }.a[ %{ Name } ];\n    if (tmp%{ Cid }) {\n        a%{ Rid }.a[ %{ Name } ] = tmp%{ Cid }.add%{ AttrType }(%{ Value });\n    } else {\n        a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(%{ Value });\n    }\n\nattr :output [ p.Value.inline() ]\n    a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(%{ Value });\n\nattr :output [ p.Op === '+=' ]\n\n    %{ Value :prologue }\n    %{ Value :output }\n    var tmp%{ Cid } = a%{ Rid }.a[ %{ Name } ];\n    if (tmp%{ Cid }) {\n        a%{ Rid }.a[ %{ Name } ] = tmp%{ Cid }.add%{ AttrType }(r%{ Value.Rid });\n    } else {\n        a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(r%{ Value.Rid });\n    }\n\nattr :output\n\n    %{ Value :prologue }\n    %{ Value :output }\n    a%{ Rid }.a[ %{ Name } ] = new yr.%{ AttrType }Attr(r%{ Value.Rid });\n\nattrs_close :output\n    r%{ Rid } += closeAttrs(a%{ Rid });\n\nattrs_open :output [ p.Xid ]\n\n    a%{ Rid }.a = {\n        %{ Attrs :open }\n    };\n    a%{ Rid }.s = xn%{ Xid };\n\nattrs_open :output\n\n    a%{ Rid }.a = {\n        %{ Attrs :open }\n    };\n    a%{ Rid }.s = '%{ Name }';\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nsubexpr :listitem\n\n    %{ Block :prologue }\n    %{ Block :output }\n    r%{ Rid }.push(r%{ Block.Rid });\n\nsubexpr :output\n\n    %{ Block :output }\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// Selectors: jpath\n// ----------------------------------------------------------------------------------------------------------------- //\n\njpath [ a.isRoot() ]\n\n    [ c%{ Cid }.doc.root ]\n\njpath [ a.isSelf() ]\n\n    [ c%{ Cid } ]\n\njpath [ f.IsSimple && p.AsType === 'scalar' ]\n\n    simpleScalar('%{ Name }', %{ . :context })\n\njpath [ f.IsSimple && p.AsType === 'boolean' ]\n\n    simpleBoolean('%{ Name }', %{ . :context })\n\njpath [ f.IsSimple ]\n\n    selectNametest('%{ Name }', %{ . :context }, [])\n\njpath\n\n    m.s(j%{ Id }, %{ . :context })\n\njpath :context [ p.Abs ]\n\n    c%{ Cid }.doc.root\n\njpath :context\n\n    c%{ Cid }\n\n// FIXME: Переименовать jpath_filter в inline_filter.\njpath_filter\n\n    m.n(j%{ JPath.Id }, %{ Expr })\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\narglist_item\n    , v%{ Id }\n\narglist_item :defaults [ p.Default ]\n    v%{ Id } = (v%{ Id } === undefined) ? %{ Default } : v%{ Id };\n\narglist_item :defaults [ p.Typedef === 'nodeset' ]\n    v%{ Id } = (v%{ Id } === undefined) ? [] : v%{ Id };\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n//  value\n// ----------------------------------------------------------------------------------------------------------------- //\n\nvalue\n\n    %{ Value }\n\nvalue :listitem\n\n    r%{ Rid }.push(%{ Value });\n\nvalue :output [ ( a.getType() === 'nodeset' || a.getType() === 'boolean' ) && !p.AsType ]\n\n    r%{ Rid } = %{ Value };\n\nvalue :output [ a.getType() === 'attr' && p.Value.is('inline_var') ]\n\n    yr.copyAttrs( a%{ Rid }.a, %{ Value } );\n\nvalue :output [ a.getType() === 'attr' && p.Value.is('inline_function') && p.Value.def.is('external') ]\n\n    yr.copyAttrs( a%{ Rid }.a, %{ Value } );\n\n//  А тут всегда Value должно быть inline_function.\nvalue :output [ a.getType() === 'attr' ]\n\n    %{ Value };\n\nvalue :output\n\n    r%{ Rid } += %{ Value };\n\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n//  object\n//  ---------------------------------------------------------------------------------------------------------------  //\n\narray :listitem\n\n    %{ . :prologue }\n    %{ . :output }\n    r%{ ~.Rid }.push(r%{ Block.Rid });\n\narray :output\n\n    %{ Block :listitem }\n\nobject :listitem\n\n    %{ . :prologue }\n    %{ . :output }\n    r%{ ~.Rid }.push(r%{ Block.Rid });\n\nobject :output\n\n    %{ Block :output }\n\npair :output [ p.Value.inline() ]\n\n    r%{ Rid }[ %{ Key } ] = %{ Value };\n\npair :output\n\n    %{ Value :prologue }\n    %{ Value :output }\n    r%{ Rid }[ %{ Key } ] = r%{ Value.Rid };\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// inline expressions\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_ternary\n\n    ( %{ Condition } ) ? %{ Then } : %{ Else }\n\ninline_or\n    %{ Left } || %{ Right }\n\ninline_and\n    %{ Left } && %{ Right }\n\ninline_not\n    !%{ Left }\n\ninline_eq [ p.Op === '===' || p.Op === '!==' ]\n    %{ Left } %{ Op } %{ Right }\n\ninline_eq [ p.Op === '!=' && ( p.Left.getType() === 'nodeset' || p.Right.getType() === 'nodeset' ) ]\n\n    !(%{ . :cmp })\n\ninline_eq\n\n    %{ . :cmp }\n\ninline_eq :cmp [ p.Left.getType() === 'nodeset' && p.Right.getType() === 'nodeset' ]\n\n    cmpNN(%{ Left }, %{ Right })\n\ninline_eq :cmp [ p.Left.getType() === 'nodeset' ]\n\n    cmpSN(%{ Right }, %{ Left })\n\ninline_eq :cmp [ p.Right.getType() === 'nodeset' ]\n\n    cmpSN(%{ Left }, %{ Right })\n\ninline_eq :cmp\n    %{ Left } %{ Op } %{ Right }\n\ninline_rel\n    %{ Left } %{ Op } %{ Right }\n\ninline_add\n    %{ Left } %{ Op } %{ Right }\n\ninline_mul\n    %{ Left } %{ Op } %{ Right }\n\ninline_unary\n    -%{ Left }\n\ninline_union\n    (%{ Left }).concat(%{ Right })\n\ninline_subexpr\n    (%{ Expr })\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_function [ f.IsExternal ]\n    (yr.externals['%{ Name }'])(%{ Args })\n\n//  FIXME: Положить в какой-нибудь флаг инфу о том, что аргументом ключа является нодесет.\ninline_function [ f.IsKey && p.Args.first().getType() === 'nodeset' ]\n    m.k('k%{ Id }', %{ Args }, c%{ Cid }.doc.root, true)\n\ninline_function [ f.IsKey ]\n    m.k('k%{ Id }', %{ Args }, c%{ Cid }.doc.root)\n\ninline_function [ f.IsUser && a.def.isGlobal() ]\n    m.f('f%{ Id }', c%{ Cid }, i%{ Cid }, l%{ Cid }%{ . :attrs }%{ Args :comma })\n\ninline_function [ f.IsUser ]\n    f%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }%{ . :attrs }%{ Args :comma })\n\n//  Этот вызов функции сохраняется в переменную, а не просто используется.\n//  Поэтому мы передаем вместо aN новый пустой объект для атрибутов.\ninline_function :attrs [ a.getType() === 'attr' && f.InlineVarValue ]\n\n    , { a: {} }\n\ninline_function :attrs [ a.getType() === 'attr' || a.getType() === 'xml' ]\n\n    , a%{ Rid }\n\n//  Все остальное -- это встроенные функции, для них есть индивидуальные шаблоны ниже.\n//  js__internal() вызывает соответствующий шаблон.\ninline_function\n    %{ js__internal() }\n\ncallargs :comma [ !a.empty() ]\n    , %{ . }\n\ncallarg [ p.AsType === 'nodeset' && p.Expr.id === 'object' ]\n    yr.object2nodeset(%{ . :object })\n\ncallarg [ p.AsType === 'nodeset' && p.Expr.id === 'array' ]\n    yr.array2nodeset(%{ . :object })\n\ncallarg [ p.Expr.id === 'object' || p.Expr.id === 'array' ]\n    %{ . :object }\n\ncallarg :object\n    (function() {\n        %{ Expr :prologue }\n        %{ Expr :output }\n\n        return r%{ Expr.Rid };\n    })()\n\ncallarg\n\n    %{ Expr }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninternal_function_true\n    true\n\ninternal_function_false\n    false\n\ninternal_function_name [ p.Signature === 'nodeset' ]\n    yr.nodeName( %{Args} )\n\ninternal_function_name\n    c%{ Cid }.name\n\ninternal_function_index\n    i%{ Cid }\n\ninternal_function_count [ p.Signature === 'nodeset' ]\n    ( %{Args} ).length\n\ninternal_function_count\n    l%{ Cid }\n\ninternal_function_slice\n    yr.slice(%{ Args })\n\ninternal_function_html\n    %{ Args }\n\ninternal_function_exists\n    yr.exists(%{ Args })\n\ninternal_function_number\n    (+(%{ Args }))\n\ninternal_function_string [ p.Signature === 'nodeset' ]\n    ('' + yr.nodeset2scalar(%{ Args }))\n\ninternal_function_string\n    ('' + %{ Args })\n\ninternal_function_scalar\n    %{ Args }\n\ninternal_function_boolean\n    %{ Args }\n\ninternal_function_log\n    (console.log(%{ Args }),'')\n\ninternal_function_document\n    yr.document(%{ Args })\n\ninternal_function_subnode\n    yr.subnode(%{ Args }, c%{ Cid })\n\ninternal_function_current\n    current\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_var [ a.def.isGlobal() ]\n\n    m.v('v%{ Id }', c%{ Cid }.doc.root)\n\ninline_var\n    v%{ Id }\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\ninline_number\n    %{ Value }\n\ninline_string\n    %{ Value }\n\nstring_expr\n    ( %{ Expr } )\n\nstring_literal\n    %{ stringify() }\n\n\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// cast and quote\n// ----------------------------------------------------------------------------------------------------------------- //\n\ncast [ p.From === 'nodeset' && p.To === 'data' ]\n    yr.nodeset2data(%{ Expr })\n\ncast [ p.From === 'nodeset' && (p.To === 'scalar' || p.To === 'xml' || p.To === 'attrvalue' || p.To === 'boolean') ]\n    nodeset2%{ To }( %{ Expr } )\n\ncast [ p.From === 'scalar' && (p.To === 'xml' || p.To == 'attrvalue') ]\n    scalar2%{ To }( %{ Expr } )\n\ncast [ p.From === 'xml' && p.To == 'attrvalue' ]\n    xml2attrvalue( %{ Expr } )\n\ncast [ p.From === 'xml' && p.To == 'scalar' ]\n    xml2scalar( %{ Expr } )\n\ncast [ p.From === 'object' && p.To == 'nodeset' ]\n    yr.object2nodeset( %{ Expr } )\n\ncast [ p.From === 'array' && p.To == 'nodeset' ]\n    yr.array2nodeset( %{ Expr } )\n\n// FIXME: Не бывает ли ситуации, когда таки нужно нетривиально приводить scalar к boolean?\ncast [ p.From === 'scalar' && p.To === 'boolean' ]\n    %{ Expr }\n\ncast\n    %{ Expr }\n\nquote\n    yr.%{ Mode }Quote(%{ Expr })\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\nsort [ p.Order === 'desc' ]\n\n    yr.sort(%{ Nodes }, function(c%{ Cid }, i%{ Cid }, l%{ Cid }) { return %{ By }; }, true)\n\nsort\n\n    yr.sort(%{ Nodes }, function(c%{ Cid }, i%{ Cid }, l%{ Cid }) { return %{ By }; })\n\n// ----------------------------------------------------------------------------------------------------------------- //\n// misc\n// ----------------------------------------------------------------------------------------------------------------- //\n\n* :yate\n    %{ yate() }\n\n\n");
 yate.AST.yate = new pt.Codegen( 'yate', "module [ p.Name ]\n\n// FIXME экранировать кавычки\n    module \"%{ Name }\"\n\n    %{ Block }\n\nmodule\n\n    %{ Block }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ntemplate\n\n    match %{ Selectors } %{ Mode } %{ Args :list } %{ Body }\n\ntemplate_mode\n\n    %{ Value }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfunction_\n\n    func %{ Name }(%{ Args }) %{ Body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nkey\n\n    key %{ Name } (%{ Nodes }, %{ Use }) %{ Body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\narglist :list\n\n    (%{ . })\n\narglist_item [ p.Default ]\n\n    %{ Typedef } %{ Name } = %{ Default }\n\narglist_item\n\n    %{ Typedef } %{ Name }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nvar_\n\n    %{ Name } = %{ Value }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nbody [ p.AsList ]\n\n    [\n        %{ Block }\n    ]\n\nbody\n\n    {\n        %{ Block }\n    }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nblock\n\n    %{ Items }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nblock_exprs\n\n    %{ yate__() }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nif_\n\n    if %{ Condition } %{ Then }%{ Elses }\n\nelse_if\n\n    \\ else if %{ Condition } %{ Body }\n\nelse_\n\n    \\ else %{ Body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nfor_\n\n    for %{ Expr } %{ Body }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\napply\n\n    apply %{ Expr } %{ Mode } %{ Args :list }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nattr\n\n    @%{ Name } %{ Op } %{ Value }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\ninline_or\n    %{ Left } || %{ Right }\n\ninline_and\n    %{ Left } && %{ Right }\n\ninline_not\n    !%{ Left }\n\ninline_eq\n    %{ Left } %{ Op } %{ Right }\n\ninline_rel\n    %{ Left } %{ Op } %{ Right }\n\ninline_add\n    %{ Left } %{ Op } %{ Right }\n\ninline_mul\n    %{ Left } %{ Op } %{ Right }\n\ninline_unary\n    -%{ Expr }\n\ninline_union\n    %{ Left } | %{ Right }\n\ninline_subexpr\n    ( %{ Expr } )\n\ninline_function\n    %{ Name }(%{ Args })\n\ninline_number\n    %{ Value }\n\ninline_var\n    %{ Name }\n\n//  ---------------------------------------------------------------------------------------------------------------  //\n\ncallargs :list\n\n    (%{ . })\n\ncallarg\n    %{ Expr }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\njpath [ p.Abs ]\n    /%{ Steps }\n\njpath\n    %{ Steps }\n\njpath_dots\n    %{ Dots }\n\njpath_nametest\n    .%{ Name }%{ Predicates }\n\njpath_predicate\n    [ %{ Expr } ]\n\njpath_filter\n    %{ Expr }%{ JPath }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nxml_empty\n    <%{ Name }%{ Attrs }/>\n\nxml_start\n    <%{ Name }%{ Attrs }>\n\nxml_end\n    </%{ Name }>\n\nxml_text\n    %{ Text }\n\nxml_attr\n    \\ %{ Name }=%{ Value }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\n// FIXME экранировать кавычки\ninline_string\n    \"%{ Value }\"\n\nstring_expr\n    { %{ Expr } }\n\nstring_literal\n    %{ Value }\n\n// ----------------------------------------------------------------------------------------------------------------- //\n\nsubexpr\n    (\n        %{ Block }\n    )\n\npair\n    %{ Key } : %{ Value }\n\narray\n    [\n        %{ Block }\n    ]\n\nobject\n    {\n        %{ Block }\n    }\n\nvalue\n\n    %{ Value }\n\nsimple_jpath\n\n    .%{ Name }\n\ncast\n\n    %{ Expr }\n\n// vim: set filetype=javascript:\n\n\n");
 
 yate.AST.prototype._code = function(lang, mode) {
@@ -468,7 +481,7 @@ yate.AST.fromJSON = function(obj, input) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./scope.js":9,"./types.js":10,"./yate.js":12,"fs":13,"nommon":18,"parse-tools":26}],3:[function(require,module,exports){
+},{"./scope.js":9,"./types.js":10,"./yate.js":12,"fs":13,"nommon":16,"parse-tools":24}],3:[function(require,module,exports){
 var pt = require('parse-tools');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -679,6 +692,10 @@ yate.asts.items.mergeWith = function(ast) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 yate.asts.items._getType = function() {
+    if ( this.f.AsList ) {
+        return 'items';
+    }
+
     var items = this.p.Items;
     var l = items.length;
 
@@ -743,6 +760,12 @@ yate.asts.items.getScope = function() {
     return scope;
 };
 
+yate.asts.items.setAsList = function() {
+    this.f.AsList = true;
+    this.iterate( function(item) {
+        item.setAsList();
+    } );
+};
 
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -750,6 +773,12 @@ yate.asts.items.getScope = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 yate.asts.module = {};
+
+yate.asts.module.w_prepare = function( options ) {
+    if ( !this.p.Name && options[ 'module-name'] ) {
+        this.p.Name = options[ 'module-name' ];
+    }
+};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //
@@ -840,14 +869,14 @@ yate.asts.block.w_setTypes = function() {
     }
 };
 
-yate.asts.block.w_deinclude = function() {
+yate.asts.block.w_deinclude = function(options) {
     var a = [];
 
     this.p.Items.iterate(function(item) {
         if (item.id === 'include') {
-            var ast = yate.parse(item.p.Filename, 'module');
+            var ast = yate.parse(item.p.Filename, options);
             ast.dowalk(function(ast) {
-                ast.w_deinclude();
+                ast.w_deinclude(options);
             });
             a = a.concat(ast.p.Block.p.Items.p.Items);
         } else {
@@ -1044,9 +1073,7 @@ yate.asts.block.js__defs = function() {
 
 yate.asts.block.setAsList = function() {
     this.f.AsList = true;
-    this.p.Exprs.iterate(function(item) {
-        item.setAsList();
-    });
+    this.p.Exprs.setAsList();
 };
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -1159,7 +1186,7 @@ yate.asts.block_exprs.options = {
 yate.asts.block_exprs.w_validate = function() {
     var opened = [];
     this.iterate(function(item) {
-        if (item.is('xml_line') || item.is('block_list')) {
+        if ( item.is('xml_line') ) {
             item.wellFormed(opened);
         }
     });
@@ -1355,7 +1382,7 @@ yate.asts.var_.isConst = function() {
 
 yate.asts.function_ = {};
 
-yate.asts.function_.w_action = function() {
+yate.asts.function_.w_declarations = function() {
     var functions = this.scope.functions;
     var name = this.p.Name;
 
@@ -1378,6 +1405,16 @@ yate.asts.function_.w_validate = function() {
 };
 
 yate.asts.function_._getType = function() {
+    //  Защита от бесконечной рекурсии.
+    //  Если функция (прямо или косвенно) вызывает себя,
+    //  то у нее должен быть задан тип при объявлении.
+    if (this.__calc_type) {
+        this.error('Cannot get type (recursive function without type declaration?)');
+    }
+    this.__calc_type = true;
+    if (this.p.Typedef) {
+        return this.p.Typedef;
+    }
     return this.p.Body.getType();
 };
 
@@ -1581,6 +1618,13 @@ yate.asts.else_if.closes = function() {
     return this.p.Body.closes();
 };
 
+yate.asts.else_if.setAsList = function() {
+    this.p.Body.setAsList();
+};
+
+yate.asts.else_if.isLocal = function() {
+    return this.p.Body.isLocal();
+};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  else_
@@ -1594,6 +1638,14 @@ yate.asts.else_._getType = function() {
 
 yate.asts.else_.closes = function() {
     return this.p.Body.closes();
+};
+
+yate.asts.else_.setAsList = function() {
+    this.p.Body.setAsList();
+};
+
+yate.asts.else_.isLocal = function() {
+    return this.p.Body.isLocal();
 };
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -1621,6 +1673,7 @@ yate.asts.for_.oncast = function(to) {
 };
 
 yate.asts.for_.w_prepare = function() {
+    this.p.Selector.cast( 'nodeset' );
     this.p.Body.cid();
 };
 
@@ -1785,7 +1838,11 @@ yate.asts.attrs_close._getType = no.value('xml');
 yate.asts.attrs_open = {};
 
 yate.asts.attrs_open._init = function(item) {
-    this.p.Name = item.p.Name;
+    if ( item.p.Name ) {
+        this.p.Name = item.p.Name;
+    } else {
+        this.p.Xid = item.p.Xid;
+    }
     this.p.Attrs = item.p.Attrs;
     //  FIXME: По идее, переопределение parent должно происходить в this.make('attrs_open', ...),
     //  но w_setTypes для xml_attr случает раньше этого.
@@ -1835,43 +1892,83 @@ yate.asts.xml._getType = no.value('xml');
 yate.asts.xml_line = {};
 
 yate.asts.xml_line.options = {
+    base: 'xml'
+};
+
+yate.asts.xml_line._init = function(items) {
+    this.p.Items = this.make('xml_items');
+    this.p.Names = this.make('xml_names');
+};
+
+yate.asts.xml_line.wellFormed = function(opened) {
+    return this.p.Items.wellFormed(opened);
+};
+
+yate.asts.xml_line.opens = function() {
+    return this.p.Items.opens();
+};
+
+yate.asts.xml_line.lastTag = function() {
+    return this.p.Items.lastTag();
+};
+
+yate.asts.xml_line.oncast = function(to) {
+    this.p.Items.cast(to);
+};
+
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+yate.asts.xml_items = {};
+
+yate.asts.xml_items.options = {
     base: 'xml',
     mixin: 'items'
 };
 
-yate.asts.xml_line.wellFormed = function(opened) {
+yate.asts.xml_items.wellFormed = function(opened) {
     var that = this;
 
-    this.iterate(function(item) {
-        if (item.is('xml_start')) {
-            opened.push(item.p.Name);
-        } else if (item.is('xml_end')) {
-            var name = opened.pop();
-            if (!name) {
-                //  FIXME: Если p.Name === true, будет не очень внятное сообщение об ошибке.
-                that.error('Закрывающий тег </' + item.p.Name + '> не был предварительно открыт');
-            } else if ( (item.p.Name !== name) && (item.p.Name !== true) ) {
-                that.error('Невалидный XML. Ожидается </' + name + '>');
+    this.iterate( function( item ) {
+        if ( item.is( 'xml_start' ) ) {
+            opened.push( item );
+
+        } else if ( item.is( 'xml_end' ) ) {
+            var start = opened.pop();
+            var end = item;
+
+            if ( !start || !start.is( 'xml_start' ) ) {
+                end.error('Закрывающий тег не был предварительно открыт');
             }
-            //  FIXME: Не очень подходящее место для этого действия.
-            //  Лучше бы унести это в какой-то .action().
-            item.p.Name = name;
+
+            if ( start.p.Xid ) {
+                if ( end.p.Name !== true ) {
+                    end.error( 'Невалидный XML. Ожидается </>' );
+                }
+                end.p.Xid = start.p.Xid;
+                delete end.p.Name;
+
+            } else {
+                if ( end.p.Name !== true && end.p.Name !== start.p.Name ) {
+                    end.error('Невалидный XML. Ожидается </' + start.p.Name + '>');
+                }
+                end.p.Name = start.p.Name;
+            }
         }
-    });
+    } );
 };
 
-yate.asts.xml_line.opens = function() {
+yate.asts.xml_items.opens = function() {
     return !!this.lastTag();
 };
 
-yate.asts.xml_line.lastTag = function() {
+yate.asts.xml_items.lastTag = function() {
     var last = this.last();
     if ( last.is('xml_start') ) {
         return last;
     }
 };
 
-yate.asts.xml_line.js__content = function() {
+yate.asts.xml_items.js__content = function() {
     var items = [];
     this.toResult(items);
 
@@ -1897,14 +1994,41 @@ yate.asts.xml_line.js__content = function() {
         var item = r[i];
         if (typeof item == 'string') {
             r[i] = JSON.stringify(item);
-        } else {
+
+        } else if (item instanceof yate.AST) {
             r[i] = item.js();
+
+        } else {
+            r[i] = item.ast.js(item.mode);
         }
     }
 
-    return r.join(' + ') || "''"; // FIXME: В случае, когда xml_line состоит из одного, скажем, </img>, должна выводиться хотя бы пустая строка.
+    return r.join(' + ') || "''"; // FIXME: В случае, когда xml_items состоит из одного, скажем, </img>, должна выводиться хотя бы пустая строка.
 };
 
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+yate.asts.xml_names = {};
+
+yate.asts.xml_names.options = {
+    mixin: 'items'
+};
+
+yate.asts.xml_names.jssep__init = ', ';
+
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+yate.asts.xml_name = {};
+
+yate.asts.xml_name.w_action = function() {
+    if ( !this.p.Xid ) {
+        this.p.Xid = ++this.state.xid;
+    }
+};
+
+yate.asts.xml_name.w_prepare = function() {
+    this.p.Expr.cast('scalar');
+};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  xml_start
@@ -1916,13 +2040,31 @@ yate.asts.xml_start.options = {
     base: 'xml'
 };
 
-yate.asts.xml_start.toResult = function(result) {
+yate.asts.xml_start.w_action = function() {
     var name = this.p.Name;
+    if ( typeof name !== 'string' ) {
+        this.parent.parent.p.Names.add( name );
+        this.p.Xid = name.p.Xid;
+        delete this.p.Name;
+    }
+};
 
-    result.push('<' + name);
-    if (!this.open) {
-        this.p.Attrs.toResult(result);
-        result.push( (yate.consts.shortTags[name]) ? '/>' : '>' );
+yate.asts.xml_start.toResult = function( result ) {
+    if ( this.p.Xid ) {
+        result.push('<', { ast: this, mode: 'open' } );
+        if ( !this.open ) {
+            this.p.Attrs.toResult( result );
+            result.push( { ast: this, mode: 'open_close' } );
+        }
+
+    } else {
+        var name = this.p.Name;
+
+        result.push( '<' + name );
+        if ( !this.open ) {
+            this.p.Attrs.toResult( result );
+            result.push( ( yate.consts.shortTags[ name ] ) ? '/>' : '>' );
+        }
     }
 };
 
@@ -1937,15 +2079,16 @@ yate.asts.xml_end.options = {
     base: 'xml'
 };
 
-yate.asts.xml_end.w_action = function() {
-    if ( yate.consts.shortTags[this.p.Name] ) {
-        this.f.Short = true;
-    }
-};
-
 yate.asts.xml_end.toResult = function(result) {
-    if (!this.f.Short) {
-        result.push('</' + this.p.Name + '>');
+    if ( this.p.Xid ) {
+        result.push( { ast: this, mode: 'close' } );
+
+    } else {
+        var name = this.p.Name;
+
+        if ( !yate.consts.shortTags[ name ] ) {
+            result.push('</' + name + '>');
+        }
     }
 };
 
@@ -2002,7 +2145,6 @@ yate.asts.xml_full.options = {
     base: 'xml',
     mixin: 'items'
 };
-
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  xml_attrs
@@ -2088,7 +2230,7 @@ yate.asts.inline_expr.toResult = function(result) {
             mode: this.mode
         }) );
     } else {
-        result.push(this);
+        result.push( this );
     }
 };
 
@@ -2133,6 +2275,33 @@ yate.asts.inline_expr.w_transform = function() {
     }
 };
 
+
+//  ---------------------------------------------------------------------------------------------------------------  //
+//  inline_ternary
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+yate.asts.inline_ternary = {};
+
+yate.asts.inline_ternary.options = {
+    base: 'expr'
+};
+
+yate.asts.inline_ternary._getType = function() {
+    return yate.types.commonType( this.p.Then.getType(), this.p.Else.getType() );
+};
+
+yate.asts.inline_ternary.w_setTypes = function() {
+    this.p.Condition.cast('boolean');
+};
+
+yate.asts.inline_ternary.oncast = function(to) {
+    this.p.Then.cast(to);
+    this.p.Else.cast(to);
+};
+
+yate.asts.inline_ternary.isLocal = function() {
+    return this.p.Condition.isLocal() || this.p.Then.isLocal() || this.p.Else.isLocal();
+};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  inline_op
@@ -2229,6 +2398,21 @@ yate.asts.inline_eq.w_setTypes = function() {
 
     var lType = Left.getType();
     var rType = Right.getType();
+
+    if (this.p.Op === '===' || this.p.Op === '!==') {
+        //  Все типы, кроме нодесета, можно сравнивать как есть
+        //  и приводить их не нужно.
+        //  А из нодесета нужно достать данные.
+        //
+        if (lType === 'nodeset') {
+            Left.cast('data');
+        }
+        if (rType === 'nodeset') {
+            Right.cast('data');
+        }
+
+        return;
+    }
 
     if (lType === 'boolean' || rType === 'boolean') {
         Left.cast('boolean');
@@ -2675,6 +2859,23 @@ yate.asts.inline_function.js__internal = function() {
     return yate.AST.js.generate('internal_function_' + this.p.Name, this);
 };
 
+yate.asts.inline_function.closes = function() {
+    var type = this.getType();
+
+    if ( type === 'attr' ) {
+        return false;
+    }
+    if ( type === 'xml' ) {
+        if ( this.f.IsUser ) {
+            //  FIXME: Тут нужна защита от зацикливания, наверное?
+            //  Для рекурсивных функций.
+            return this.def.p.Body.closes();
+        }
+    }
+
+    return true;
+};
+
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  inline_internal_function
@@ -2867,7 +3068,7 @@ yate.asts.jpath.w_validate = function() {
 };
 
 yate.asts.jpath.validateMatch = function() {
-    var steps = this.p.Steps.p;
+    var steps = this.p.Steps.p.Items;
     for (var i = 0, l = steps.length; i < l; i++) {
         var step = steps[i];
         if ( step.is('jpath_dots') ) {
@@ -3022,7 +3223,9 @@ yate.asts.jpath_filter._init = function(params) {
 yate.asts.jpath_filter._getType = no.value('nodeset');
 
 yate.asts.jpath_filter.isLocal = function() {
-    return this.p.Expr.isLocal() || this.p.JPath.isLocal();
+    return this.p.Expr.isLocal();
+    //  NOTE: Так было и это неправильно. Локальность зависит только от основной части.
+    //  return this.p.Expr.isLocal() || this.p.JPath.isLocal();
 };
 
 yate.asts.jpath_filter.getScope = function() {
@@ -3250,7 +3453,7 @@ yate.asts.cdata = {};
 yate.asts.cdata._getType = no.value('xml');
 
 
-},{"./ast.js":2,"./consts.js":4,"./entities.json":5,"./runtime.js":8,"./scope.js":9,"./types.js":10,"./yate.js":12,"nommon":18,"parse-tools":26}],4:[function(require,module,exports){
+},{"./ast.js":2,"./consts.js":4,"./entities.json":5,"./runtime.js":8,"./scope.js":9,"./types.js":10,"./yate.js":12,"nommon":16,"parse-tools":24}],4:[function(require,module,exports){
 var yate = require('./yate.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3379,7 +3582,12 @@ yate.consts.internalFunctions = {
             type: 'nodeset',
             args: [ 'scalar', 'scalar' ]
         }
-    ]
+    ],
+
+    'current': {
+        type: 'nodeset',
+        local: false
+    }
 
 };
 
@@ -3662,7 +3870,7 @@ yate.factory = new pt.Factory(yate.AST, yate.asts);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./ast.js":2,"./asts.js":3,"./yate.js":12,"parse-tools":26}],7:[function(require,module,exports){
+},{"./ast.js":2,"./asts.js":3,"./yate.js":12,"parse-tools":24}],7:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3693,7 +3901,8 @@ grammar.tokens = {
     '/': /^\/(?!\/)/,
     '|': /^\|(?!\|)/,
     '=': /^=(?!=)/,
-    ATTR_END: /^(?:\s+|\+=|=)/
+    ATTR_END: /^(?:\s+|\+=|=)/,
+    TAG_END: /^(?:\s+|>)/
 };
 
 
@@ -3714,6 +3923,7 @@ grammar.keywords = [
     'else',
     'else if',
     'apply',
+    'apply-imports',
     'key',
     'nodeset',
     'boolean',
@@ -3967,6 +4177,9 @@ rules.typedef = function() {
 
 rules.function_ = function(p, a) {
     this.match('FUNC');
+    if ( this.test('typedef') ) {
+        p.Typedef = this.match('typedef');
+    }
     p.Name = this.match('QNAME');
     p.Args = this.match('arglist');
     p.Body = this.match('body');
@@ -4041,7 +4254,7 @@ rules.block_expr = function() {
         r = this.match('if_');
     } else if ( this.test('FOR') ) {
         r = this.match('for_');
-    } else if ( this.test('APPLY') ) {
+    } else if ( this.testAny('APPLY-IMPORTS', 'APPLY') ) {
         r = this.match('apply');
     } else if ( this.test(':::') ) {
         r = this.match('cdata');
@@ -4118,7 +4331,12 @@ rules.for_ = function(p, a) {
 //  apply := 'apply' ( inline_expr | array | object ) template_mode? callargs?
 
 rules.apply = function(p, a) {
-    this.match('APPLY');
+    var keyword = this.matchAny('APPLY-IMPORTS', 'APPLY');
+    if ( keyword === 'apply' ) {
+        p.Start = 0;
+    } else {
+        p.Start = 1;
+    }
 
     if ( this.test('{') ) {
         p.Expr = this.match('object');
@@ -4253,9 +4471,10 @@ rules.value = function(p, a) {
 rules.xml_line = {
 
     rule: function(p, a) {
+        var items = a.p.Items;
         var r;
         while (( r = this.testAny('xml_full', 'xml_empty', 'xml_start', 'xml_end') )) {
-            a.add( this.match(r) );
+            items.add( this.match(r) );
         }
     },
 
@@ -4303,9 +4522,20 @@ rules.xml_full = {
 
 rules.xml_start = function(p, a) {
     this.match('<');
-    p.Name = this.match('QNAME');
+    if ( this.test('{') ) {
+        p.Name = this.match('xml_name');
+
+    } else {
+        p.Name = this.match('QNAME');
+    }
     p.Attrs = this.match('xml_attrs');
     this.match('>');
+};
+
+rules.xml_name = function(p, a) {
+    this.match('{');
+    p.Expr = this.match('inline_expr');
+    this.match('}');
 };
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -4375,10 +4605,13 @@ rules.xml_attrs = {
 
 };
 
-//  xml_attr := QNAME '=' inline_string
+//  xml_attr := QNAME ( ':' QNAME )? '=' inline_string
 
 rules.xml_attr = function(p, a) {
     p.Name = this.match('QNAME');
+    if (this.test(':')) {
+        p.Name += this.match(':') + this.match('QNAME');
+    }
     this.match('=');
     p.Value = this.match('inline_string');
 };
@@ -4393,7 +4626,7 @@ rules.xml_attr = function(p, a) {
 rules.inline_expr = {
 
     rule: function() {
-        return this.match('inline_or');
+        return this.match('inline_ternary');
     },
 
     options: {
@@ -4402,10 +4635,27 @@ rules.inline_expr = {
 
 };
 
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+rules.inline_ternary = function(p, a) {
+    p.Condition = this.match('inline_or');
+
+    if ( this.test('?') ) {
+        this.match('?');
+        p.Then = this.match('inline_expr');
+        this.match(':');
+        p.Else = this.match('inline_expr');
+    } else {
+        return p.Condition;
+    }
+};
+
+//  ---------------------------------------------------------------------------------------------------------------  //
+
 rules.multiline_expr = {
 
     rule: function() {
-        return this.match('inline_or');
+        return this.match('inline_ternary');
     },
 
     options: {
@@ -4443,7 +4693,7 @@ rules.inline_and = function(p, a) {
 rules.inline_eq = function(p, a) {
     p.Left = this.match('inline_rel');
     var op;
-    if (( op = this.testAny('==', '!=') )) {
+    if (( op = this.testAny('===', '!==', '==', '!=') )) {
         p.Op = this.match(op);
         p.Right = this.match('inline_rel');
     } else {
@@ -4973,7 +5223,7 @@ yate.grammar = new pt.Grammar(grammar);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate.js":12,"parse-tools":26,"path":15}],8:[function(require,module,exports){
+},{"./yate.js":12,"parse-tools":24,"path":32}],8:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate runtime
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -5061,10 +5311,6 @@ yr.xml2attr = function(s) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 yr.register = function(id, module) {
-    if ( modules[id] ) {
-        throw Error('Module "' + id + '" already exists');
-    }
-
     //  Резолвим ссылки на импортируемые модули.
 
     var ids = module.imports || [];
@@ -5087,7 +5333,22 @@ yr.register = function(id, module) {
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 
-yr.run = function(id, data, mode) {
+yr.isRegistered = function (id) {
+    return !!modules[id];
+};
+
+//  ---------------------------------------------------------------------------------------------------------------  //
+
+// Вызов модуля
+// id - идентификатор модуля (String)
+// data - данные для отрисовки (Object, Array, String, Number)
+// mode - мода для поиска шаблонов в ней (String)
+// args - параметры вызова шаблона (Array)
+// nodeName - имя для корневой ноды (String)
+//
+// yr.run('moduleId', {'name': 'Vasya'}, 'profile', null, 'user')
+//
+yr.run = function(id, data, mode, args, nodeName) {
     mode = mode || '';
 
     var module = modules[id];
@@ -5095,9 +5356,14 @@ yr.run = function(id, data, mode) {
         throw 'Module "' + id + '" is undefined';
     }
 
-    var doc = new Doc(data);
+    var doc = new Doc(data, nodeName);
+    var r;
 
-    var r = module.a(module, [ doc.root ], mode, { a: {} } );
+    if (args) {
+        r = module.a.apply(module, [module, 0, [doc.root], mode, { a: {} }].concat(args));
+    } else {
+        r = module.a(module, 0, [ doc.root ], mode, { a: {} } );
+    }
 
     return r;
 };
@@ -5159,7 +5425,7 @@ yr.simpleBoolean = function simpleBoolean(name, context) {
 
     if (!r) { return false; }
 
-    if (r instanceof Array) {
+    if (Array.isArray(r)) {
         return r.length;
     }
 
@@ -5249,17 +5515,27 @@ yr.cmpNN = function cmpNN(left, right) {
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 
-yr.shortTags = {
-    br: true,
-    col: true,
-    embed: true,
-    hr: true,
-    img: true,
-    input: true,
-    link: true,
-    meta: true,
-    param: true,
-    wbr: true
+yr.isShort = function( name ) {
+    return (
+        name === 'br' ||
+        name === 'col' ||
+        name === 'embed' ||
+        name === 'hr' ||
+        name === 'img' ||
+        name === 'input' ||
+        name === 'link' ||
+        name === 'meta' ||
+        name === 'param' ||
+        name === 'wbr'
+    );
+};
+
+var rx_tagName = /[^a-zA-Z]/g;
+yr.tagName = function(name) {
+    if (!name) {
+        return 'div';
+    }
+    return (''+name).replace(rx_tagName, '') || 'div';
 };
 
 yr.closeAttrs = function closeAttrs(a) {
@@ -5300,7 +5576,7 @@ yr.closeAttrs = function closeAttrs(a) {
             }
         }
         */
-        r += (yr.shortTags[name]) ? '/>' : '>';
+        r += ( yr.isShort(name) ) ? '/>' : '>';
         a.s = null;
 
         return r;
@@ -5448,13 +5724,13 @@ var Module = function() {};
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 //  NOTE: ex applyValue.
-Module.prototype.a = function applyValue(M, nodeset, mode, a0) {
+Module.prototype.a = function applyValue(M, start, nodeset, mode, a0) {
     var r = '';
 
     //  Достаем аргументы, переданные в apply, если они там есть.
     var args;
-    if (arguments.length > 4) {
-        args = Array.prototype.slice.call(arguments, 4);
+    if (arguments.length > 5) {
+        args = Array.prototype.slice.call(arguments, 5);
     }
 
     var imports = M.imports;
@@ -5472,7 +5748,7 @@ Module.prototype.a = function applyValue(M, nodeset, mode, a0) {
         var found = false;
         var module;
 
-        var i2 = 0;
+        var i2 = start;
         var l2 = imports.length;
         var template;
         while (!found && i2 < l2) {
@@ -5659,7 +5935,7 @@ yr.selectNametest = function selectNametest(step, context, result) {
     if (!data || typeof data !== 'object') { return result; }
 
     if (step === '*') {
-        if (data instanceof Array) {
+        if (Array.isArray(data)) {
             for (var i = 0, l = data.length; i < l; i++) {
                 yr.selectNametest(i, context, result);
             }
@@ -5675,7 +5951,7 @@ yr.selectNametest = function selectNametest(step, context, result) {
     if (data === undefined) { return result; }
 
     var doc = context.doc;
-    if (data instanceof Array) {
+    if (Array.isArray(data)) {
         for (var i = 0, l = data.length; i < l; i++) {
             result.push({
                 data: data[i],
@@ -5711,7 +5987,7 @@ yr.document = function(nodeset) {
 yr.subnode = function(name, data, context) {
     var doc = context.doc;
 
-    if (data instanceof Array) {
+    if (Array.isArray(data)) {
         var nodeset = [];
         for (var i = 0, l = data.length; i < l; i++) {
             nodeset.push({
@@ -5918,9 +6194,9 @@ Module.prototype.findSymbol = function(id) {
 
 //  ---------------------------------------------------------------------------------------------------------------  //
 
-function Doc(data) {
+function Doc(data, nodeName) {
     //  FIXME: Что тут использовать? Array.isArray?
-    if (data instanceof Array) {
+    if (Array.isArray(data)) {
         data = {
             //  FIXME: Сделать название поля ('item') настраеваемым.
             'item': data
@@ -5930,7 +6206,7 @@ function Doc(data) {
     this.root = {
         data: data,
         parent: null,
-        name: '',
+        name: nodeName || '',
         doc: this
     };
 
@@ -5939,6 +6215,9 @@ function Doc(data) {
 }
 
 //  ---------------------------------------------------------------------------------------------------------------  //
+
+
+
 
 
 
@@ -5955,7 +6234,8 @@ yr.Module = Module;
 //  Потому что в тестах runtime грузится не как модуль (пока что, надеюсь),
 //  но просто эвалится, поэтому в нем module не определен.
 //
-if (typeof module === 'object' && module.exports) {
+
+if (typeof module !== 'undefined') {
     module.exports = yr;
 }
 
@@ -6074,9 +6354,6 @@ yate.types.joinType = function(left, right) {
     //  ATTR + ??? == XML, XML + ??? == XML.
     if (left == 'xml' || left == 'attr' || right == 'xml' || right == 'attr') { return 'xml'; }
 
-    //  LIST + LIST == LIST
-    if (left == 'list' && right == 'list') { return 'list'; }
-
     //  Все остальное это SCALAR.
     return 'scalar';
 };
@@ -6088,6 +6365,7 @@ yate.types.convertable = function(from, to) {
         (from == to) ||
         (to == 'any') ||
         (from == 'undef') ||
+        (to == 'items') ||
         (from == 'nodeset' && to == 'scalar') ||
         (from == 'nodeset' && to == 'xml') ||
         (from == 'nodeset' && to == 'attrvalue') ||
@@ -6140,8 +6418,10 @@ yate.types.commonType = function(left, right) {
 
 
 },{"./yate":12}],11:[function(require,module,exports){
-var global=typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};global.yate = require('./actions.js');
+(function (global){
+global.yate = require('./actions.js');
 
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"./actions.js":1}],12:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate
@@ -6153,8 +6433,6 @@ var yate = {};
 
 yate.version = require('../package.json').version;
 
-yate.cliOptions = {};
-
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 module.exports = yate;
@@ -6165,382 +6443,6 @@ module.exports = yate;
 },{"../package.json":35}],13:[function(require,module,exports){
 
 },{}],14:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
-    }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            if (ev.source === window && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
-    }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
-
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-}
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-
-},{}],15:[function(require,module,exports){
-var process=require("__browserify_process");// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
-  }
-
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
-  }
-
-  return root + dir;
-};
-
-
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-
-exports.extname = function(path) {
-  return splitPath(path)[3];
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-},{"__browserify_process":14}],16:[function(require,module,exports){
-var indexOf = require('indexof');
-
-var Object_keys = function (obj) {
-    if (Object.keys) return Object.keys(obj)
-    else {
-        var res = [];
-        for (var key in obj) res.push(key)
-        return res;
-    }
-};
-
-var forEach = function (xs, fn) {
-    if (xs.forEach) return xs.forEach(fn)
-    else for (var i = 0; i < xs.length; i++) {
-        fn(xs[i], i, xs);
-    }
-};
-
-var Script = exports.Script = function NodeScript (code) {
-    if (!(this instanceof Script)) return new Script(code);
-    this.code = code;
-};
-
-Script.prototype.runInNewContext = function (context) {
-    if (!context) context = {};
-    
-    var iframe = document.createElement('iframe');
-    if (!iframe.style) iframe.style = {};
-    iframe.style.display = 'none';
-    
-    document.body.appendChild(iframe);
-    
-    var win = iframe.contentWindow;
-    
-    forEach(Object_keys(context), function (key) {
-        win[key] = context[key];
-    });
-     
-    if (!win.eval && win.execScript) {
-        // win.eval() magically appears when this is called in IE:
-        win.execScript('null');
-    }
-    
-    var winKeys = Object_keys(win);
-
-    var res = win.eval(this.code);
-    
-    forEach(Object_keys(win), function (key) {
-        // Avoid copying circular objects like `top` and `window` by only
-        // updating existing context properties or new properties in the `win`
-        // that was only introduced after the eval.
-        if (key in context || indexOf(winKeys, key) === -1) {
-            context[key] = win[key];
-        }
-    });
-    
-    document.body.removeChild(iframe);
-    
-    return res;
-};
-
-Script.prototype.runInThisContext = function () {
-    return eval(this.code); // maybe...
-};
-
-Script.prototype.runInContext = function (context) {
-    // seems to be just runInNewContext on magical context objects which are
-    // otherwise indistinguishable from objects except plain old objects
-    // for the parameter segfaults node
-    return this.runInNewContext(context);
-};
-
-forEach(Object_keys(Script.prototype), function (name) {
-    exports[name] = Script[name] = function (code) {
-        var s = Script(code);
-        return s[name].apply(s, [].slice.call(arguments, 1));
-    };
-});
-
-exports.createScript = function (code) {
-    return exports.Script(code);
-};
-
-exports.createContext = Script.createContext = function (context) {
-    // not really sure what this one does
-    // seems to just make a shallow copy
-    var copy = {};
-    if(typeof context === 'object') {
-        forEach(Object_keys(context), function (key) {
-            copy[key] = context[key];
-        });
-    }
-    return copy;
-};
-
-},{"indexof":17}],17:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -6551,7 +6453,53 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],18:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
+//  Inspired by: https://github.com/Marak/colors.js
+
+(function() {
+
+var colors = {
+
+    //  Styles
+    'bold'      : [1,  22],
+    'italic'    : [3,  23],
+    'underline' : [4,  24],
+    'inverse'   : [7,  27],
+
+    //  Dark colors
+    'gray'      : [30, 39],
+    'maroon'    : [31, 39],
+    'green'     : [32, 39],
+    'olive'     : [33, 39],
+    'navy'      : [34, 39],
+    'purple'    : [35, 39],
+    'teal'      : [36, 39],
+    'silver'    : [37, 39],
+
+    //  Bright colors
+    'black'     : [90, 39],
+    'red'       : [91, 39],
+    'lime'      : [92, 39],
+    'yellow'    : [93, 39],
+    'blue'      : [94, 39],
+    'fuchsia'   : [95, 39],
+    'aqua'      : [96, 39],
+    'white'     : [97, 39]
+
+};
+
+for (var color in colors) {
+    String.prototype.__defineGetter__(color, (function (color) {
+        return function() {
+            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
+        }
+    })( colors[color] ));
+}
+
+})();
+
+
+},{}],16:[function(require,module,exports){
 var no = require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6570,7 +6518,7 @@ module.exports = no;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.array.js":19,"./no.base.js":20,"./no.events.js":21,"./no.jpath.js":22,"./no.object.js":23,"./no.promise.js":25}],19:[function(require,module,exports){
+},{"./no.array.js":17,"./no.base.js":18,"./no.events.js":19,"./no.jpath.js":20,"./no.object.js":21,"./no.promise.js":23}],17:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6602,8 +6550,9 @@ no.array.map = function(array, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],20:[function(require,module,exports){
-var process=require("__browserify_process");//  ---------------------------------------------------------------------------------------------------------------  //
+},{"./no.base.js":18}],18:[function(require,module,exports){
+(function (process){
+//  ---------------------------------------------------------------------------------------------------------------  //
 //  no
 //  ---------------------------------------------------------------------------------------------------------------  //
 
@@ -6710,7 +6659,8 @@ if ( no.de ) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"__browserify_process":14}],21:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"_process":33}],19:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if ( no.de ) {
@@ -6851,7 +6801,7 @@ no.Events.forward = function(name, object) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],22:[function(require,module,exports){
+},{"./no.base.js":18}],20:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 require('./no.parser.js');
@@ -8029,7 +7979,7 @@ function compileSetter(jpath) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20,"./no.parser.js":24}],23:[function(require,module,exports){
+},{"./no.base.js":18,"./no.parser.js":22}],21:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8055,7 +8005,7 @@ no.object.map = function(object, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],24:[function(require,module,exports){
+},{"./no.base.js":18}],22:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8150,7 +8100,7 @@ no.Parser.prototype.error = function(msg) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20}],25:[function(require,module,exports){
+},{"./no.base.js":18}],23:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if  ( no.de ) {
@@ -8397,7 +8347,7 @@ no.Promise.rejected = function(result) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":20,"./no.events.js":21}],26:[function(require,module,exports){
+},{"./no.base.js":18,"./no.events.js":19}],24:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  parse-tools
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8420,7 +8370,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.ast.js":27,"./pt.codegen.js":28,"./pt.factory.js":29,"./pt.grammar.js":30,"./pt.inputstream.js":31,"./pt.js":32,"./pt.parser.js":33}],27:[function(require,module,exports){
+},{"./pt.ast.js":25,"./pt.codegen.js":26,"./pt.factory.js":27,"./pt.grammar.js":28,"./pt.inputstream.js":29,"./pt.js":30,"./pt.parser.js":31}],25:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  pt.AST
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -8566,7 +8516,7 @@ pt.AST.prototype.toString = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"no.colors":34}],28:[function(require,module,exports){
+},{"./pt.js":30,"no.colors":15}],26:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var pt = require('./pt.js');
@@ -8804,7 +8754,7 @@ pt.Codegen.prototype._doMacro = function(macro, ast) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32}],29:[function(require,module,exports){
+},{"./pt.js":30}],27:[function(require,module,exports){
 var pt = require('./pt.js');
 
 var no = require('nommon');
@@ -8901,7 +8851,7 @@ pt.Factory.prototype.get = function(id) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"nommon":18}],30:[function(require,module,exports){
+},{"./pt.js":30,"nommon":16}],28:[function(require,module,exports){
 var pt = require('./pt.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9054,7 +9004,7 @@ pt.Grammar.prototype.makeSkipper = function(id, skipper) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32}],31:[function(require,module,exports){
+},{"./pt.js":30}],29:[function(require,module,exports){
 var fs_ = require('fs');
 var path_ = require('path');
 
@@ -9163,7 +9113,7 @@ pt.InputStream.prototype.getPos = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":32,"fs":13,"path":15}],32:[function(require,module,exports){
+},{"./pt.js":30,"fs":13,"path":32}],30:[function(require,module,exports){
 var pt = {};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9173,7 +9123,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{}],33:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -9382,53 +9332,471 @@ pt.Parser.prototype.getState = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.inputstream.js":31,"./pt.js":32,"path":15}],34:[function(require,module,exports){
-//  Inspired by: https://github.com/Marak/colors.js
+},{"./pt.inputstream.js":29,"./pt.js":30,"path":32}],32:[function(require,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-(function() {
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
 
-var colors = {
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
 
-    //  Styles
-    'bold'      : [1,  22],
-    'italic'    : [3,  23],
-    'underline' : [4,  24],
-    'inverse'   : [7,  27],
-
-    //  Dark colors
-    'gray'      : [30, 39],
-    'maroon'    : [31, 39],
-    'green'     : [32, 39],
-    'olive'     : [33, 39],
-    'navy'      : [34, 39],
-    'purple'    : [35, 39],
-    'teal'      : [36, 39],
-    'silver'    : [37, 39],
-
-    //  Bright colors
-    'black'     : [90, 39],
-    'red'       : [91, 39],
-    'lime'      : [92, 39],
-    'yellow'    : [93, 39],
-    'blue'      : [94, 39],
-    'fuchsia'   : [95, 39],
-    'aqua'      : [96, 39],
-    'white'     : [97, 39]
-
-};
-
-for (var color in colors) {
-    String.prototype.__defineGetter__(color, (function (color) {
-        return function() {
-            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
-        }
-    })( colors[color] ));
+  return parts;
 }
 
-})();
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe =
+    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+var splitPath = function(filename) {
+  return splitPathRe.exec(filename).slice(1);
+};
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
 
 
-},{}],35:[function(require,module,exports){
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function(path) {
+  var result = splitPath(path),
+      root = result[0],
+      dir = result[1];
+
+  if (!root && !dir) {
+    // No dirname whatsoever
+    return '.';
+  }
+
+  if (dir) {
+    // It has a dirname, strip trailing slash
+    dir = dir.substr(0, dir.length - 1);
+  }
+
+  return root + dir;
+};
+
+
+exports.basename = function(path, ext) {
+  var f = splitPath(path)[2];
+  // TODO: make this comparison case-insensitive on windows?
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+
+exports.extname = function(path) {
+  return splitPath(path)[3];
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":33}],33:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = setTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    clearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],34:[function(require,module,exports){
+var indexOf = require('indexof');
+
+var Object_keys = function (obj) {
+    if (Object.keys) return Object.keys(obj)
+    else {
+        var res = [];
+        for (var key in obj) res.push(key)
+        return res;
+    }
+};
+
+var forEach = function (xs, fn) {
+    if (xs.forEach) return xs.forEach(fn)
+    else for (var i = 0; i < xs.length; i++) {
+        fn(xs[i], i, xs);
+    }
+};
+
+var defineProp = (function() {
+    try {
+        Object.defineProperty({}, '_', {});
+        return function(obj, name, value) {
+            Object.defineProperty(obj, name, {
+                writable: true,
+                enumerable: false,
+                configurable: true,
+                value: value
+            })
+        };
+    } catch(e) {
+        return function(obj, name, value) {
+            obj[name] = value;
+        };
+    }
+}());
+
+var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
+'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
+'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
+'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
+'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
+
+function Context() {}
+Context.prototype = {};
+
+var Script = exports.Script = function NodeScript (code) {
+    if (!(this instanceof Script)) return new Script(code);
+    this.code = code;
+};
+
+Script.prototype.runInContext = function (context) {
+    if (!(context instanceof Context)) {
+        throw new TypeError("needs a 'context' argument.");
+    }
+    
+    var iframe = document.createElement('iframe');
+    if (!iframe.style) iframe.style = {};
+    iframe.style.display = 'none';
+    
+    document.body.appendChild(iframe);
+    
+    var win = iframe.contentWindow;
+    var wEval = win.eval, wExecScript = win.execScript;
+
+    if (!wEval && wExecScript) {
+        // win.eval() magically appears when this is called in IE:
+        wExecScript.call(win, 'null');
+        wEval = win.eval;
+    }
+    
+    forEach(Object_keys(context), function (key) {
+        win[key] = context[key];
+    });
+    forEach(globals, function (key) {
+        if (context[key]) {
+            win[key] = context[key];
+        }
+    });
+    
+    var winKeys = Object_keys(win);
+
+    var res = wEval.call(win, this.code);
+    
+    forEach(Object_keys(win), function (key) {
+        // Avoid copying circular objects like `top` and `window` by only
+        // updating existing context properties or new properties in the `win`
+        // that was only introduced after the eval.
+        if (key in context || indexOf(winKeys, key) === -1) {
+            context[key] = win[key];
+        }
+    });
+
+    forEach(globals, function (key) {
+        if (!(key in context)) {
+            defineProp(context, key, win[key]);
+        }
+    });
+    
+    document.body.removeChild(iframe);
+    
+    return res;
+};
+
+Script.prototype.runInThisContext = function () {
+    return eval(this.code); // maybe...
+};
+
+Script.prototype.runInNewContext = function (context) {
+    var ctx = Script.createContext(context);
+    var res = this.runInContext(ctx);
+
+    forEach(Object_keys(ctx), function (key) {
+        context[key] = ctx[key];
+    });
+
+    return res;
+};
+
+forEach(Object_keys(Script.prototype), function (name) {
+    exports[name] = Script[name] = function (code) {
+        var s = Script(code);
+        return s[name].apply(s, [].slice.call(arguments, 1));
+    };
+});
+
+exports.createScript = function (code) {
+    return exports.Script(code);
+};
+
+exports.createContext = Script.createContext = function (context) {
+    var copy = new Context();
+    if(typeof context === 'object') {
+        forEach(Object_keys(context), function (key) {
+            copy[key] = context[key];
+        });
+    }
+    return copy;
+};
+
+},{"indexof":14}],35:[function(require,module,exports){
 module.exports={
     "author": {
         "name": "Sergey Nikitin",
@@ -9437,7 +9805,7 @@ module.exports={
     },
     "name": "yate",
     "description": "Yet Another Template Engine",
-    "version": "0.0.64",
+    "version": "0.0.80",
     "homepage": "https://github.com/pasaran/yate",
     "repository": {
         "type": "git",
@@ -9458,9 +9826,9 @@ module.exports={
         "sinon-chai": "~2.3",
         "chai": "~1.5",
         "grunt": "~0.4",
-        "grunt-simple-mocha": "git://github.com/yaymukund/grunt-simple-mocha.git",
-        "grunt-contrib-watch": "~0.5.0",
-        "grunt-browserify": "~1.2.4",
+        "grunt-simple-mocha": "^0.4.1",
+        "grunt-contrib-watch": "^0.5.0",
+        "grunt-browserify": "5.0.0",
         "matchdep": "~0.1.2"
     },
     "optionalDependencies": {},
@@ -9485,4 +9853,4 @@ module.exports={
     }
 }
 
-},{}]},{},[11])
+},{}]},{},[11]);
