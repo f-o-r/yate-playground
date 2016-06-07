@@ -42,4 +42,5 @@ module.exports = function(grunt) {
 
     grunt.registerTask('test', ['simplemocha:unit']);
     grunt.registerTask('default', ['watch:server']);
+    grunt.registerTask('build', ['browserify']);
 };
