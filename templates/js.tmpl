@@ -25,6 +25,8 @@ module
         var simpleBoolean = yr.simpleBoolean;
         var selectNametest = yr.selectNametest;
         var closeAttrs = yr.closeAttrs;
+        var tagName = yr.tagName;
+        var isShort = yr.isShort;
 
         var M = new yr.Module();
 
@@ -68,6 +70,7 @@ template :def
     function t%{ Id }(m, c%{ Cid }, i%{ Cid }, l%{ Cid }, a%{ Rid }%{ Args }) {
         %{ Args :defaults }
         %{ . :template_prologue }
+        var current = [ c%{ Cid } ];
 
         %{ Body :output }
 
@@ -482,7 +485,7 @@ apply :output-prologue [ p.Expr.id === 'object' ]
     %{ Expr :output }
 
 apply :output-value [ p.Expr.id === 'object' ]
-    m.a(m, yr.object2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
+    m.a(m, %{ Start }, yr.object2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
 
 apply :output-prologue [ p.Expr.id === 'array' ]
 
@@ -490,19 +493,19 @@ apply :output-prologue [ p.Expr.id === 'array' ]
     %{ Expr :output }
 
 apply :output-value [ p.Expr.id === 'array' ]
-    m.a(m, yr.array2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
+    m.a(m, %{ Start }, yr.array2nodeset(r%{ Expr.Rid }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
 
 apply :output-value [ p.Expr.getType() === 'object' ]
 
-    m.a(m, yr.object2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
+    m.a(m, %{ Start }, yr.object2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
 
 apply :output-value [ p.Expr.getType() === 'array' ]
 
-    m.a(m, yr.array2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
+    m.a(m, %{ Start }, yr.array2nodeset(%{ Expr }), %{ Mode :string }, a%{ Rid }%{ Args :comma })
 
 apply :output-value
 
-    m.a(m, %{ Expr }, %{ Mode :string }, a%{ Rid }%{ Args :comma })
+    m.a(m, %{ Start }, %{ Expr }, %{ Mode :string }, a%{ Rid }%{ Args :comma })
 
 template_mode :string
 
@@ -526,16 +529,35 @@ xml_attr :open
 
 xml_line :output
 
-    r%{ Rid } += %{ . :content };
+    %{ Names }
+    r%{ Rid } += %{ Items :content };
 
 xml_line :listitem
 
-    r%{ Rid }.push(%{ . :content });
+    %{ Names }
+    r%{ Rid }.push(%{ Items :content });
 
-xml_line :content
+xml_items :content
 
     %{ js__content() }
 
+xml_names [ !a.empty() ]
+    var %{ . :init };
+
+xml_name
+    xn%{ Xid }
+
+xml_name :init
+    xn%{ Xid } = tagName(%{ Expr })
+
+xml_start :open
+    xn%{ Xid }
+
+xml_start :open_close
+    ( isShort(xn%{ Xid }) ? '/>' : '>' )
+
+xml_end :close
+    ( isShort(xn%{ Xid }) ? '' : '</' + xn%{ Xid } + '>' )
 
 // ----------------------------------------------------------------------------------------------------------------- //
 
@@ -571,6 +593,13 @@ attr :output
 
 attrs_close :output
     r%{ Rid } += closeAttrs(a%{ Rid });
+
+attrs_open :output [ p.Xid ]
+
+    a%{ Rid }.a = {
+        %{ Attrs :open }
+    };
+    a%{ Rid }.s = xn%{ Xid };
 
 attrs_open :output
 
@@ -721,6 +750,10 @@ pair :output
 // inline expressions
 // ----------------------------------------------------------------------------------------------------------------- //
 
+inline_ternary
+
+    ( %{ Condition } ) ? %{ Then } : %{ Else }
+
 inline_or
     %{ Left } || %{ Right }
 
@@ -729,6 +762,9 @@ inline_and
 
 inline_not
     !%{ Left }
+
+inline_eq [ p.Op === '===' || p.Op === '!==' ]
+    %{ Left } %{ Op } %{ Right }
 
 inline_eq [ p.Op === '!=' && ( p.Left.getType() === 'nodeset' || p.Right.getType() === 'nodeset' ) ]
 
@@ -885,6 +921,9 @@ internal_function_document
 
 internal_function_subnode
     yr.subnode(%{ Args }, c%{ Cid })
+
+internal_function_current
+    current
 
 // ----------------------------------------------------------------------------------------------------------------- //
 
