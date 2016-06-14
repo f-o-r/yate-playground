@@ -25,6 +25,7 @@ body {
 #right_part {
     background: #f0f0f0;
     color: #2b2b2b;
+    overflow-y: auto;
 }
 
 #left_part, #right_part {
