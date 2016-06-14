@@ -6,83 +6,70 @@
         <title></title>
         <link href="client/components/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="client/css/yate.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.15.2/codemirror.min.css">
+        <link rel="stylesheet" href="client/css/custom_monokai.css">
     </head>
 
     <body ng-controller="MainController">
-        <header class="navbar navbar-fixed-top yate-navbar" role="navigation">
-            <div class="text-center">
-                <span class="brand">
-                    <b>Y</b>ate <small>playground</small>
-                </span>
-            </div>
-        </header>
 
-        <div class="contents repl_wrapper repl_{{repl_status}}">
-            <div class="code">
+        <div id="wrapper" class="full_height">
+            <div id="left_part" class="col-md-9 full_height">
+                <header>
+                    <div class="header_links header_links_left">
+                            <a href="#"><strong>YATE playground</strong></a>
+                            <a href="#">Github</a>
+                            <a href="#">Documentation</a>
+                            <a href="#">Issues</a>
+                    </div>
+
+                    <div class="header_links header_links_right">
+                        <a href="#">Save</a>
+                        <a href="#" ng-click="repl(repl_source)">Run</a>
+                    </div>
+
+                    <div class="clearfix"></div>
+                </header>
 
                 <div id="repl_source_wrap">
-                    <textarea id="repl_source" rows="100"
-                        spellcheck="false"
-                        ng-keydown="repl(repl_source)"
-                        ng-change="repl(repl_source)"
-                        ng-model="repl_source" >
+                    <textarea id="repl_source"
+                              spellcheck="false"
+                              ng-model="repl_source" >
 module "hello"
 
-/**
- * In the context passed the global object (window)
- */
+/*
+* In the context passed the global object (window)
+*/
+
 match / {
     "Hello {.navigator.appName}"
-}
-                    </textarea>
+}</textarea>
+                    <div class="clearfix"></div>
+                </div>
+            </div>
+
+            <div id="right_part" class="col-md-3 full_height">
+
+                <div>
+                    <span id="compile_status" class="invisible">&#9679;</span>
+
+                    <span class="yate_version">
+                        yate version: {{version}}
+                    </span>
                 </div>
 
                 <div id="repl_results_wrap">
                     <pre id="repl_results" ng-bind="repl_results"></pre>
                 </div>
-
-                <a class="minibutton" ng-click="repl(repl_source)">Run</a>
-                <a class="minibutton permalink" href="//github.com/maksimr/yate/tree/gh-pages" target="_blank">Link</a>
-
-                <br class="clear"/>
             </div>
         </div>
 
-        <footer class="footer">
-            <div class="text-center">
-                <ul class="footer-links">
-                    <li>
-                        <a href="//github.com/pasaran/yate/wiki/syntax" target="_blank">Documentation</a>
-                    </li>
-                    <li class="muted">·</li>
-                    <li>
-                        <a href="//github.com/pasaran/yate" target="_blank">GitHub</a>
-                    </li>
-                    <li class="muted">·</li>
-                    <li>
-                        <a href="//github.com/pasaran/yate/issues" target="_blank">Issues</a>
-                    </li>
-                    <li class="muted">·</li>
-                    <li>
-                        Site designed and built by <a href="http://twitter.com/maksimrv" target="_blank">@maksimrv</a>
-                    </li>
-                    <li>
-                        (yate version: {{version}})
-                    </li>
-                </ul>
-            </div>
-        </footer>
-
+        <script src="client/components/codemirror-compressed.js" type="text/javascript" charset="utf-8"></script>
         <script src="client/yate.js" type="text/javascript"></script>
         <script src="lib/runtime.js" type="text/javascript"></script>
-
         <script src="client/components/jquery/jquery.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="client/components/behave.js" type="text/javascript"></script>
-
         <script src="client/components/bootstrap/dist/js/bootstrap.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="client/components/angular/angular.min.js" type="text/javascript" charset="utf-8"></script>
-
         <script src="client/app.js" type="text/javascript" charset="utf-8"></script>
     </body>
-
 </html>
