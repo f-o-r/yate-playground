@@ -8,23 +8,24 @@
         <link href="client/css/yate.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.15.2/codemirror.min.css">
         <link rel="stylesheet" href="client/css/custom_monokai.css">
+        <link rel="stylesheet" href="client/css/custom_elegant.css">
     </head>
 
     <body ng-controller="MainController">
 
         <div id="wrapper" class="full_height">
-            <div id="left_part" class="col-md-9 full_height">
+            <div id="left_part" class="col-md-8 full_height">
                 <header>
                     <div class="header_links header_links_left">
                             <a href="#"><strong>YATE playground</strong></a>
-                            <a href="#">Github</a>
-                            <a href="#">Documentation</a>
-                            <a href="#">Issues</a>
+                            <a href="https://github.com/f-o-r/yate-playground">Github</a>
+                            <a href="https://github.com/pasaran/yate/wiki/syntax">Documentation</a>
+                            <a href="https://github.com/f-o-r/yate-playground/issues">Issues</a>
                     </div>
 
                     <div class="header_links header_links_right">
-                        <a href="#">Save</a>
-                        <a href="#" ng-click="repl(repl_source)">Run</a>
+                        <a href="#" onclick="alert('Will be implemented soon!');">Save</a>
+                        <!--<a href="#" ng-click="repl(repl_source)">Run</a>-->
                     </div>
 
                     <div class="clearfix"></div>
@@ -41,13 +42,13 @@ module "hello"
 */
 
 match / {
-    "Hello {.navigator.appName}"
+    <h1>"Hello {.navigator.appName}"</h1>
 }</textarea>
                     <div class="clearfix"></div>
                 </div>
             </div>
 
-            <div id="right_part" class="col-md-3 full_height">
+            <div id="right_part" class="col-md-4 full_height">
 
                 <div>
                     <span id="compile_status" class="invisible">&#9679;</span>
@@ -58,7 +59,7 @@ match / {
                 </div>
 
                 <div id="repl_results_wrap">
-                    <pre id="repl_results" ng-bind="repl_results"></pre>
+                    <textarea id="repl_results_textarea"></textarea>
                 </div>
             </div>
         </div>
