@@ -1,9 +1,15 @@
 body {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 21px;
-    font-family: "Helvetica Neue", "Lucida Grande", "Lucida Sans Unicode", Helvetica, Arial, sans-serif !important;
+    font-family: Arial, sans-serif !important;
     margin: 0;
     padding: 0;
+}
+
+/* custom font for the editor */
+@font-face {
+    font-family: "Menlo";
+    src: url(Menlo-Regular.ttf) format("truetype");
 }
 
 .full_height {
@@ -20,32 +26,28 @@ body {
 #left_part {
     background: #2b2b2b;
     color: #c8c8c8;
+    padding-left: 20px;
 }
 
 #right_part {
     background: #f0f0f0;
     color: #2b2b2b;
     overflow-y: auto;
+    padding-left: 28px;
 }
 
 #left_part, #right_part {
-    padding: 10pt;
+    padding-top: 19px;
 }
-
 
 .header_links a {
     border: solid #2b2b2b 1px;
-    padding: 5pt 7pt 5pt 7pt;
-}
-
-.header_links a:hover {
-    border-color: #cccccc;
-    border-radius: 3px;
+    margin-right: 20px;
 }
 
 .header_links a {
     color: #cccccc;
-    font-size: medium;
+    font-size: 14px;
 }
 
 .header_links a:hover, a:active, a:focus {
@@ -54,7 +56,8 @@ body {
 
 .header_links_left a:first-child {
     border-color: #2b2b2b;
-    font-size: large;
+    font-size: 18px;
+    font-weight: bold;
 }
 
 .header_links_left {
@@ -67,11 +70,17 @@ body {
     float: right;
 }
 
-/* Code textarea */
-#repl_source_wrap {
-    padding-top: 2em;
+#repl_source_wrap, #repl_results_wrap {
     overflow-y: auto;
-    height: calc(100% - 2em);
+    height: calc(100% - 3em);
+}
+
+#repl_source_wrap {
+    padding-top: 33px;
+}
+
+#repl_results_wrap {
+    padding-top: 27px;
 }
 
 #repl_source {
@@ -85,20 +94,23 @@ body {
 }
 
 .yate_version {
+    font-size: 11px;
+    font-family: Arial, sans-serif;
     float: right;
     color: #ccc;
 }
 
 #compile_status {
-    font-size: 40px;
+    font-size: 38px;
+    line-height: 18px;
 }
 
 .red {
-    color: red;
+    color: #fc2323;
 }
 
 .green {
-    color: green;
+    color: #00db00;
 }
 
 .invisible {

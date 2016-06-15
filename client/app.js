@@ -10,11 +10,31 @@
             var sourceTextArea = $('#repl_source');
             var cm = CodeMirror.fromTextArea(sourceTextArea.get(0), {
                 autoClearEmptyLines: true,
-                theme: 'monokai',
+                theme: 'base16-dark',
                 lineNumbers: true,
                 autofocus: true,
                 indentUnit: 4
             });
+            return cm;
+        }());
+    }(this));
+
+    /**
+     *  @desc Object of result field (based on CodeMirror as well)
+     */
+    (function(global) {
+        global.resultArea = (function() {
+            var resultTextArea = $('#repl_results_textarea');
+            var cm = CodeMirror.fromTextArea(resultTextArea.get(0), {
+                autoClearEmptyLines: true,
+                theme: 'base16-light',
+                readOnly: true,
+                mode: "htmlmixed",
+                lineNumbers: false,
+                autofocus: false,
+                indentUnit: 4
+            });
+            cm.setValue("<b>abc</b>");
             return cm;
         }());
     }(this));
@@ -39,6 +59,8 @@
     });
 
     yateApp.value('editorObject', global.editor);
+
+    yateApp.value('resultArea', global.resultArea);
 
     yateApp.value('yate', global.yate);
 
@@ -76,21 +98,19 @@
                 compiled = yate.compile(source); // compile yate template
                 (1 && eval)(compiled.js); // Eval compiled template
                 logger.log('compiled', compiled);
-                $scope.repl_results = yateRuntime.run(compiled.ast.p.Name, global); // Convert yate template to html
+                resultArea.setValue(yateRuntime.run(compiled.ast.p.Name, global));
                 $scope.repl_status = 'success';
                 indicator.attr('class', 'green');
             } catch (replError) {
                 logger.error(replError.stack);
                 $scope.repl_status = 'error';
-                $scope.repl_results = replError.stack;
+                resultArea.setValue(replError.stack);
                 indicator.attr('class', 'red');
             }
         };
 
-        // Now used only by button "Run"
-        $scope.repl = function() {
-            compile(editorObject.getValue());
-        };
+        // For the first time, run compile() manually
+        compile(editorObject.getValue());
 
         editorObject.on('change', function(cm) {
             // Compile with pause
