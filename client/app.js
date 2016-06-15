@@ -34,7 +34,6 @@
                 autofocus: false,
                 indentUnit: 4
             });
-            cm.setValue("<b>abc</b>");
             return cm;
         }());
     }(this));
