@@ -2,6 +2,7 @@
     /*global angular*/
     var yateApp = angular.module('yate', []);
 
+
     /**
      * @desc Object of source editor (CodeMirror)
      */
@@ -28,7 +29,7 @@
             var cm = CodeMirror.fromTextArea(resultTextArea.get(0), {
                 autoClearEmptyLines: true,
                 theme: 'base16-light',
-                readOnly: true,
+                readOnly: 'nocursor',
                 mode: "htmlmixed",
                 lineNumbers: false,
                 autofocus: false,
@@ -37,6 +38,7 @@
             return cm;
         }());
     }(this));
+
 
     /**
      * @desc Logger
@@ -72,10 +74,10 @@
 
 
         var logger = new Logger('repl');
+        var editorValue = editorObject.getValue();
+        $scope.repl_source = editorValue;
 
-        $scope.repl_source = editorObject.getValue();
         $scope.version = yate.version;
-
         var indicator = $('#compile_status');
 
         /**
@@ -109,7 +111,8 @@
         };
 
         // For the first time, run compile() manually
-        compile(editorObject.getValue());
+        compile(editorValue); // For the first time, run compile() manually
+        editorObject.setCursor({line: editorValue.split('\n').length-3, ch: null}); // Set carret at the end of n-3 line
 
         editorObject.on('change', function(cm) {
             // Compile with pause
@@ -120,5 +123,43 @@
             }, 50, true);
         });
 
+        var paste_input = $('#paste_input');
+        /* SAVING! */
+        $('#save_button').click(function() {
+            var copy_block = $('#copy_block_container');
+            var loader_block = $('#loader_block');
+            var data = {
+                "description": "Just an YATE file",
+                "public": true,
+                "files": {
+                    "yate-playground.yate": {
+                        "content": editorObject.getValue()
+                    }
+                }
+            };
+            $.ajax({
+                url: 'https://api.github.com/gists',
+                method: 'POST',
+                data: JSON.stringify(data),
+                beforeSend: function() {
+                    copy_block.hide();
+                    loader_block.show();
+                },
+                success: function(answer) {
+                    var url = answer.html_url;
+                    copy_block.show();
+                    paste_input.val(url);
+                    paste_input.select();
+                    $('#open_button_url').attr('href', url);
+                },
+                error: function(xhr, status, error) {
+                    alert('Something went wrong...');
+                    console.error(xhr, status, error);
+                },
+                complete: function() {
+                    loader_block.hide();
+                }
+            });
+        });
     });
 }(this));
