@@ -16,19 +16,31 @@
         <div id="wrapper" class="full_height">
             <div id="left_part" class="col-md-8 full_height">
                 <header>
-                    <div class="header_links header_links_left">
-                            <a href="#"><strong>YATE playground</strong></a>
-                            <a href="https://github.com/f-o-r/yate-playground">Github</a>
-                            <a href="https://github.com/pasaran/yate/wiki/syntax">Documentation</a>
-                            <a href="https://github.com/f-o-r/yate-playground/issues">Issues</a>
-                    </div>
+                    <div class="header_links">
 
-                    <div class="header_links header_links_right">
-                        <a href="#" onclick="alert('Will be implemented soon!');">Save</a>
-                        <!--<a href="#" ng-click="repl(repl_source)">Run</a>-->
+                            <strong id="title">YATE play</strong><span class="remove-spaces">
+                                <a href="https://github.com/f-o-r/yate-playground"><span class="button-link">Github</span></a>
+                                <a href="https://github.com/pasaran/yate/wiki/syntax"><span class="button-link">Documentation</span></a>
+                                <a href="https://github.com/f-o-r/yate-playground/issues"><span class="button-link">Issues</span></a>
+                            </span>
+                            <div class="right_menu_wrapper">
+                                <div class="right_menu">
+                                    <span id="loader_block">
+                                        Sending file...
+                                    </span>
+                                    <div id="copy_block_container">
+                                        <div id="copy_block" class="input-group">
+                                            <input id="paste_input" type="text" class="form-control input-sm"
+                                                   value="here will be your link">
+                                                <a href="" id="open_button_url" target="_blank" class="input-group-addon">
+                                                    <span class="glyphicon glyphicon-play"></span>
+                                                </a>
+                                        </div>
+                                    </div>
+                                    <span id="save_button" class="save">Save</span>
+                                </div>
+                            </div>
                     </div>
-
-                    <div class="clearfix"></div>
                 </header>
 
                 <div id="repl_source_wrap">
@@ -42,15 +54,16 @@ module "hello"
 */
 
 match / {
-    <h1>"Hello {.navigator.appName}"</h1>
-}</textarea>
-                    <div class="clearfix"></div>
+    <h1>Hello {.navigator.appName}</h1>
+    
+}
+</textarea>
                 </div>
             </div>
 
             <div id="right_part" class="col-md-4 full_height">
 
-                <div>
+                <div id="right_header">
                     <span id="compile_status" class="invisible">&#9679;</span>
 
                     <span class="yate_version">
@@ -60,8 +73,8 @@ match / {
 
                 <div id="repl_results_wrap">
                     <textarea id="repl_results_textarea"></textarea>
-                    <div class="clearfix"></div>
                 </div>
+
             </div>
         </div>
 

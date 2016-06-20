@@ -27,10 +27,10 @@
 .cm-s-base16-dark .CodeMirror-activeline-background { background: #202020; }
 .cm-s-base16-dark .CodeMirror-matchingbracket { text-decoration: underline; color: white !important; }
 
-.CodeMirror-line {
-    padding-left: 10px !important;
+.cm-s-base16-dark .CodeMirror-line {
+    padding-left: 7px !important;
 }
 
-.CodeMirror-linenumber {
-    left: -10px !important;
+.cm-s-base16-dark .CodeMirror-linenumber {
+    left: -11px !important;
 }

@@ -27,3 +27,8 @@
 
 .cm-s-base16-light .CodeMirror-activeline-background { background: #DDDCDC; }
 .cm-s-base16-light .CodeMirror-matchingbracket { text-decoration: underline; color: white !important; }
+
+.cm-s-base16-light .CodeMirror-line {
+    padding-left: 0px !important;
+    padding-right: 0px !important;
+}
