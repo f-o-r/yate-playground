@@ -11,7 +11,14 @@ module.exports = function(grunt) {
         browserify: {
             client: {
                 files: {
-                    'client/yate.js': ['lib/yate-browser.js']
+                    'client/playgroundApp.js': ['clientApp/app.js']
+                }
+            }
+        },
+        uglify: {
+            client: {
+                files: {
+                    'client/playgroundApp.min.js': ['client/playgroundApp.js']
                 }
             }
         },
@@ -42,5 +49,5 @@ module.exports = function(grunt) {
 
     grunt.registerTask('test', ['simplemocha:unit']);
     grunt.registerTask('default', ['watch:server']);
-    grunt.registerTask('build', ['browserify']);
+    grunt.registerTask('build', ['browserify', 'uglify']);
 };

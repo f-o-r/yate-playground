@@ -1,55 +1,58 @@
 {
-    "author": {
-        "name": "Sergey Nikitin",
-        "email": "nik.pasaran@gmail.com",
-        "url": "https://github.com/pasaran"
-    },
-    "name": "yate",
-    "description": "Yet Another Template Engine",
-    "version": "0.0.80",
-    "homepage": "https://github.com/pasaran/yate",
-    "repository": {
-        "type": "git",
-        "url": "git://github.com/pasaran/yate.git"
-    },
-    "dependencies": {
-        "nopt": "*",
-        "nommon": "git://github.com/maksimr/nommon.git",
-        "parse-tools": "git://github.com/maksimr/parse-tools.git",
-        "brfs": "0.0.8"
-    },
-    "devDependencies": {
-        "mocha": "~1.8",
-        "mocks": "~0.0.10",
-        "mockery": "~1.4.0",
-        "chai-as-promised": "~3.2",
-        "sinon": "~1.6",
-        "sinon-chai": "~2.3",
-        "chai": "~1.5",
-        "grunt": "~0.4",
-        "grunt-simple-mocha": "^0.4.1",
-        "grunt-contrib-watch": "^0.5.0",
-        "grunt-browserify": "5.0.0",
-        "matchdep": "~0.1.2"
-    },
-    "optionalDependencies": {},
-    "engines": {
-        "node": "*"
-    },
-    "bin": "./yate",
-    "main": "./lib/actions.js",
-    "files": [
-        "lib",
-        "templates",
-        "yate"
-    ],
-    "license": {
-        "type": "MIT",
-        "url": "https://github.com/pasaran/yate/raw/master/LICENSE"
-    },
-    "browserify": {
-        "transform": [
-            "brfs"
-        ]
-    }
+  "author": {
+    "name": "Sergey Nikitin",
+    "email": "nik.pasaran@gmail.com",
+    "url": "https://github.com/pasaran"
+  },
+  "name": "yate",
+  "description": "Yet Another Template Engine",
+  "version": "0.0.80",
+  "homepage": "https://github.com/pasaran/yate",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/pasaran/yate.git"
+  },
+  "dependencies": {
+    "brfs": "0.0.8",
+    "codemirror": "^5.17.0",
+    "jquery": "^3.1.0",
+    "nommon": "git://github.com/maksimr/nommon.git",
+    "nopt": "*",
+    "parse-tools": "git://github.com/maksimr/parse-tools.git"
+  },
+  "devDependencies": {
+    "chai": "~1.5",
+    "chai-as-promised": "~3.2",
+    "grunt": "~0.4",
+    "grunt-browserify": "5.0.0",
+    "grunt-contrib-uglify": "^2.0.0",
+    "grunt-contrib-watch": "^0.5.0",
+    "grunt-simple-mocha": "^0.4.1",
+    "matchdep": "~0.1.2",
+    "mocha": "~1.8",
+    "mockery": "~1.4.0",
+    "mocks": "~0.0.10",
+    "sinon": "~1.6",
+    "sinon-chai": "~2.3"
+  },
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  },
+  "bin": "./yate",
+  "main": "./lib/actions.js",
+  "files": [
+    "lib",
+    "templates",
+    "yate"
+  ],
+  "license": {
+    "type": "MIT",
+    "url": "https://github.com/pasaran/yate/raw/master/LICENSE"
+  },
+  "browserify": {
+    "transform": [
+      "brfs"
+    ]
+  }
 }

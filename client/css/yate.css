@@ -18,6 +18,11 @@ body {
     height: 100%;
 }
 
+#context_wrap {
+    position: fixed;
+    background-color: inherit;
+}
+
 /* end common */
 
 /* base blocks */
@@ -55,7 +60,7 @@ body {
 }
 
 .remove-spaces {
-    line-height: 0px;
+    line-height: 0;
     font-size: 0;
 }
 
@@ -82,6 +87,7 @@ body {
 
 .right_menu_wrapper {
     position: relative;
+    z-index: 500;
 }
 
 .right_menu {
@@ -90,7 +96,7 @@ body {
     bottom: 0;
 }
 
-.save {
+.button {
     background-color: #cccccc;
     color: #2b2b2b;
     padding: 8px 13px 7px 10px;
@@ -98,14 +104,20 @@ body {
     border-width: 0px;
 }
 
-.save:hover {
+.button:hover {
     cursor: pointer;
+}
+
+#toggle_edition_mode {
+    margin-left: 15px;
+    min-width: 60px;
+    width: 60px;
 }
 
 /* HEADER end */
 
 /* right header */
-.yate_version {
+.yate_version_block {
     font-size: 11px;
     font-family: Arial, sans-serif;
     float: right;
@@ -177,20 +189,21 @@ body {
 /* right header end */
 
 
-#repl_source_wrap, #repl_results_wrap {
+.textarea_wrap {
     overflow-y: auto;
     height: calc(100% - 3em);
+    width: 100%;
 }
 
-#repl_source_wrap {
+.editor_wrap {
     padding-top: 33px;
 }
 
-#repl_results_wrap {
+.result_wrap {
     padding-top: 27px;
 }
 
-#repl_source {
+#repl_source, #context_source {
     background: transparent;
     outline: none;
     color: #ccc;
@@ -204,9 +217,9 @@ body {
     display: none;
 }
 
-#repl_results {
+#repl_result {
     background: transparent;
     border-width: 0px;
     font-size: 14px;
+    width: 100%;
 }
-
