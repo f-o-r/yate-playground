@@ -140,11 +140,6 @@ body {
     color: #28c942;
 }
 
-#right_header * {
-    padding: 0;
-}
-
-
 #copy_block_container {
     display: none;
 }
@@ -195,14 +190,6 @@ body {
     width: 100%;
 }
 
-.editor_wrap {
-    padding-top: 33px;
-}
-
-.result_wrap {
-    padding-top: 27px;
-}
-
 #repl_source, #context_source {
     background: transparent;
     outline: none;
@@ -222,4 +209,47 @@ body {
     border-width: 0px;
     font-size: 14px;
     width: 100%;
+}
+
+#repl_rendered_result {
+    background: transparent;
+    border-width: 0px;
+    font-size: 14px;
+    width: 100%;
+}
+
+#editor {
+    padding-top: 33px;
+}
+
+#result {
+    padding-top: 27px;
+}
+
+.mode {
+    height: 0;
+}
+
+.mode-editor #editor_wrap {
+    height: auto;
+}
+
+.mode-context #context_wrap {
+    height: auto;
+}
+
+.mode-styles #styles_wrap {
+    height: auto;
+}
+
+.mode-raw #result_wrap {
+    height: auto;
+}
+
+.mode-rendered #rendered_wrap {
+    height: auto;
+}
+
+.mode-compiled #compiled_wrap {
+    height: auto;
 }

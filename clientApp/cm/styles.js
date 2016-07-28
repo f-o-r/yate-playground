@@ -2,11 +2,11 @@ var $ = require('jquery');
 var CodeMirror = require('codemirror');
 require('codemirror/mode/javascript/javascript');
 
-var textArea = $('#context_source').get(0);
+var textArea = $('#styles_source').get(0);
 var params = {
     autoClearEmptyLines: true,
     theme: 'base16-dark',
-    mode: "javascript",
+    mode: "css",
     lineNumbers: true,
     autofocus: true,
     indentUnit: 4
