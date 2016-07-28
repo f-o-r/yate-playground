@@ -1,5 +1,8 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 var resultArea = require('../cm/result');
+var renderedResultArea = require('../cm/renderedResult');
+var compiledArea = require('../cm/compiled');
+var stylesArea = require('../cm/styles');
 var editorArea = require('../cm/editor');
 var contextArea = require('../cm/context');
 var compile = require('../compile');
@@ -12,10 +15,27 @@ function onEditorChange() {
     }
     var result = compile(editorArea.getValue(), context);
     resultArea.setValue(result.output);
+    compiledArea.setValue(result.compiled);
+    renderedResultArea.setContent(result.output);
+    renderedResultArea.setStyles(stylesArea.getValue());
 }
 
 module.exports = onEditorChange;
-},{"../cm/context":5,"../cm/editor":6,"../cm/result":7,"../compile":8}],2:[function(require,module,exports){
+
+},{"../cm/compiled":6,"../cm/context":7,"../cm/editor":8,"../cm/renderedResult":9,"../cm/result":10,"../cm/styles":11,"../compile":12}],2:[function(require,module,exports){
+var $ = require('jquery');
+
+var isEditor = true;
+
+function toggleMode(event) {
+    $('#result')
+        .removeClass()
+        .addClass($(event.target).data('mode'));
+}
+
+module.exports = toggleMode;
+
+},{"jquery":33}],3:[function(require,module,exports){
 var $ = require('jquery');
 var editorArea = require('../cm/editor');
 var contextArea = require('../cm/context');
@@ -48,10 +68,11 @@ function onSaveClick(event) {
 
             copy_block.show();
             var base_url = window.location.origin + window.location.pathname;
-            paste_input.val(base_url + '?' + queryString);
+            var new_url = base_url + '?' + queryString;
+            paste_input.val(new_url);
             paste_input.select();
 
-            $('#open_button_url').attr('href', answer.html_url);
+            $('#open_button_url').attr('href', new_url);
         },
         error: function(xhr, status, error) {
             alert('Something went wrong, check the console');
@@ -91,42 +112,48 @@ function prepareData(yateFile, yateContext) {
 }
 
 module.exports = onSaveClick;
-},{"../cm/context":5,"../cm/editor":6,"jquery":32}],3:[function(require,module,exports){
+},{"../cm/context":7,"../cm/editor":8,"jquery":33}],4:[function(require,module,exports){
 var $ = require('jquery');
 
 var isEditor = true;
 
 function toggleMode(event) {
-    if (isEditor) {
-        $('#editor_wrap').hide();
-        $('#context_wrap').show();
-    } else {
-        $('#editor_wrap').show();
-        $('#context_wrap').hide(); 
-    }
-
-    var altText = this.attr('data-altText');
-    this.attr('data-altText', this.html());
-    this.html(altText);
-
-    isEditor = !isEditor;
-
-    return this;
+    $('#editor')
+        .removeClass()
+        .addClass($(event.target).data('mode'));
+    // if (isEditor) {
+    //     $('#editor_wrap').hide();
+    //     $('#context_wrap').show();
+    // } else {
+    //     $('#editor_wrap').show();
+    //     $('#context_wrap').hide();
+    // }
+    //
+    // var altText = this.attr('data-altText');
+    // this.attr('data-altText', this.html());
+    // this.html(altText);
+    //
+    // isEditor = !isEditor;
+    //
+    // return this;
 }
 
 module.exports = toggleMode;
-},{"jquery":32}],4:[function(require,module,exports){
+
+},{"jquery":33}],5:[function(require,module,exports){
 var $ = require('jquery');
 var yate = require('../lib/actions.js');
 
 var onEditorChange = require('./actions/change');
 var onSaveClick = require('./actions/save');
 var onToggleClick = require('./actions/toggle');
+var changeResultsMode = require('./actions/changeResultsMode');
 var loadGist = require('./loadGist');
 
 var resultArea = require('./cm/result');
 var editorArea = require('./cm/editor');
 var contextArea = require('./cm/context');
+var stylesArea = require('./cm/styles');
 
 $(document).ready(initApp);
 
@@ -149,18 +176,38 @@ function initApp() {
     // events
     editorArea.on('change', onEditorChange);
     contextArea.on('change', onEditorChange);
+    stylesArea.on('change', onEditorChange);
     $('#save_button').on('click', onSaveClick);
 
-    // toggle yate and context edition
-    var toggleButton = $('#toggle_edition_mode');
-    toggleButton.on('click', onToggleClick.bind(toggleButton));
+    // select editor mode
+    $('.change-editor-mode-button').on('click', onToggleClick);
+
+    // select editor mode
+    $('.change-results-mode-button').on('click', changeResultsMode);
 
     // setting current yate version
     $('#yate_version').html(yate.version);
 }
 
+},{"../lib/actions.js":14,"./actions/change":1,"./actions/changeResultsMode":2,"./actions/save":3,"./actions/toggle":4,"./cm/context":7,"./cm/editor":8,"./cm/result":10,"./cm/styles":11,"./loadGist":13,"jquery":33}],6:[function(require,module,exports){
+var $ = require('jquery');
+var CodeMirror = require('codemirror');
+require('codemirror/mode/javascript/javascript');
 
-},{"../lib/actions.js":10,"./actions/change":1,"./actions/save":2,"./actions/toggle":3,"./cm/context":5,"./cm/editor":6,"./cm/result":7,"./loadGist":9,"jquery":32}],5:[function(require,module,exports){
+var textArea = $('#repl_compiled_result').get(0);
+var params = {
+    autoClearEmptyLines: true,
+    theme: 'base16-light',
+    readOnly: 'nocursor',
+    mode: "js",
+    lineNumbers: false,
+    autofocus: false,
+    indentUnit: 4
+};
+
+module.exports = CodeMirror.fromTextArea(textArea, params);
+
+},{"codemirror":26,"codemirror/mode/javascript/javascript":30,"jquery":33}],7:[function(require,module,exports){
 var $ = require('jquery');
 var CodeMirror = require('codemirror');
 require('codemirror/mode/javascript/javascript');
@@ -176,7 +223,8 @@ var params = {
 };
 
 module.exports = CodeMirror.fromTextArea(textArea, params);
-},{"codemirror":21,"codemirror/mode/javascript/javascript":25,"jquery":32}],6:[function(require,module,exports){
+
+},{"codemirror":26,"codemirror/mode/javascript/javascript":30,"jquery":33}],8:[function(require,module,exports){
 var $ = require('jquery');
 var CodeMirror = require('codemirror');
 require('codemirror/mode/coffeescript/coffeescript');
@@ -192,7 +240,39 @@ var params = {
 };
 
 module.exports = CodeMirror.fromTextArea(textArea, params);
-},{"codemirror":21,"codemirror/mode/coffeescript/coffeescript":22,"jquery":32}],7:[function(require,module,exports){
+},{"codemirror":26,"codemirror/mode/coffeescript/coffeescript":27,"jquery":33}],9:[function(require,module,exports){
+'use strict';
+
+var $ = require('jquery');
+
+var textArea = $('#repl_rendered_result').get(0);
+var shadowRootAvalible = Boolean(textArea.createShadowRoot);
+
+if (shadowRootAvalible) {
+    var shadowRoot = textArea.createShadowRoot();
+    var contentNode = document.createElement('div');
+    var stylesNode = document.createElement('style');
+
+    shadowRoot.appendChild(contentNode);
+    shadowRoot.appendChild(stylesNode);
+} else {
+    textArea.innerHTML = 'Preview is not avalible.'
+}
+
+function setContent(content) {
+    contentNode.innerHTML = content;
+}
+
+function setStyles(styles) {
+    stylesNode.innerHTML = styles;
+}
+
+module.exports = {
+    setContent: shadowRootAvalible ? setContent : function () {},
+    setStyles: shadowRootAvalible ? setStyles : function () {}
+};
+
+},{"jquery":33}],10:[function(require,module,exports){
 var $ = require('jquery');
 var CodeMirror = require('codemirror');
 require('codemirror/mode/htmlmixed/htmlmixed');
@@ -209,7 +289,24 @@ var params = {
 };
 
 module.exports = CodeMirror.fromTextArea(textArea, params);
-},{"codemirror":21,"codemirror/mode/htmlmixed/htmlmixed":24,"jquery":32}],8:[function(require,module,exports){
+},{"codemirror":26,"codemirror/mode/htmlmixed/htmlmixed":29,"jquery":33}],11:[function(require,module,exports){
+var $ = require('jquery');
+var CodeMirror = require('codemirror');
+require('codemirror/mode/javascript/javascript');
+
+var textArea = $('#styles_source').get(0);
+var params = {
+    autoClearEmptyLines: true,
+    theme: 'base16-dark',
+    mode: "css",
+    lineNumbers: true,
+    autofocus: true,
+    indentUnit: 4
+};
+
+module.exports = CodeMirror.fromTextArea(textArea, params);
+
+},{"codemirror":26,"codemirror/mode/javascript/javascript":30,"jquery":33}],12:[function(require,module,exports){
 var yate = require('../lib/actions.js');
 var yateRuntime = window.yr;
 // var yateRuntime = require('../lib/runtime.js');
@@ -255,7 +352,7 @@ function compileResult(output, compiled, success) {
 }
 
 module.exports = compile;
-},{"../lib/actions.js":10}],9:[function(require,module,exports){
+},{"../lib/actions.js":14}],13:[function(require,module,exports){
 var $ = require('jquery');
 var editorArea = require('./cm/editor');
 var contextArea = require('./cm/context');
@@ -281,7 +378,7 @@ function loadGist(id) {
 }
 
 module.exports = loadGist;
-},{"./cm/context":5,"./cm/editor":6,"jquery":32}],10:[function(require,module,exports){
+},{"./cm/context":7,"./cm/editor":8,"jquery":33}],14:[function(require,module,exports){
 var fs_ = require('fs');
 var vm_ = require('vm');
 
@@ -494,7 +591,7 @@ module.exports = yate;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./factory.js":15,"./grammar.js":16,"./yate.js":20,"fs":27,"parse-tools":41,"vm":30}],11:[function(require,module,exports){
+},{"./factory.js":19,"./grammar.js":20,"./yate.js":24,"fs":25,"parse-tools":43,"vm":53}],15:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var no = require('nommon');
@@ -764,7 +861,7 @@ yate.AST.fromJSON = function(obj, input) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./scope.js":18,"./types.js":19,"./yate.js":20,"fs":27,"nommon":33,"parse-tools":41}],12:[function(require,module,exports){
+},{"./scope.js":22,"./types.js":23,"./yate.js":24,"fs":25,"nommon":35,"parse-tools":43}],16:[function(require,module,exports){
 var pt = require('parse-tools');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3736,7 +3833,7 @@ yate.asts.cdata = {};
 yate.asts.cdata._getType = no.value('xml');
 
 
-},{"./ast.js":11,"./consts.js":13,"./entities.json":14,"./runtime.js":17,"./scope.js":18,"./types.js":19,"./yate.js":20,"nommon":33,"parse-tools":41}],13:[function(require,module,exports){
+},{"./ast.js":15,"./consts.js":17,"./entities.json":18,"./runtime.js":21,"./scope.js":22,"./types.js":23,"./yate.js":24,"nommon":35,"parse-tools":43}],17:[function(require,module,exports){
 var yate = require('./yate.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -3877,7 +3974,7 @@ yate.consts.internalFunctions = {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate.js":20}],14:[function(require,module,exports){
+},{"./yate.js":24}],18:[function(require,module,exports){
 module.exports={
     "amp": "&",
     "gt": ">",
@@ -4134,7 +4231,7 @@ module.exports={
     "diams": "♦"
 }
 
-},{}],15:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 var pt = require('parse-tools');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -4153,7 +4250,7 @@ yate.factory = new pt.Factory(yate.AST, yate.asts);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./ast.js":11,"./asts.js":12,"./yate.js":20,"parse-tools":41}],16:[function(require,module,exports){
+},{"./ast.js":15,"./asts.js":16,"./yate.js":24,"parse-tools":43}],20:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -5506,7 +5603,7 @@ yate.grammar = new pt.Grammar(grammar);
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate.js":20,"parse-tools":41,"path":28}],17:[function(require,module,exports){
+},{"./yate.js":24,"parse-tools":43,"path":51}],21:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate runtime
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6523,7 +6620,7 @@ if (typeof module !== 'undefined') {
 }
 
 
-},{}],18:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 var yate = require('./yate.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6605,7 +6702,7 @@ yate.Scope.commonScope = function(a, b) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate.js":20}],19:[function(require,module,exports){
+},{"./yate.js":24}],23:[function(require,module,exports){
 var yate = require('./yate');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6700,7 +6797,7 @@ yate.types.commonType = function(left, right) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./yate":20}],20:[function(require,module,exports){
+},{"./yate":24}],24:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  yate
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -6718,7 +6815,9 @@ module.exports = yate;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"../package.json":58}],21:[function(require,module,exports){
+},{"../package.json":54}],25:[function(require,module,exports){
+
+},{}],26:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -15655,7 +15754,7 @@ module.exports = yate;
   return CodeMirror;
 });
 
-},{}],22:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -16012,7 +16111,7 @@ CodeMirror.defineMIME("text/coffeescript", "coffeescript");
 
 });
 
-},{"../../lib/codemirror":21}],23:[function(require,module,exports){
+},{"../../lib/codemirror":26}],28:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -16839,7 +16938,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
 
 });
 
-},{"../../lib/codemirror":21}],24:[function(require,module,exports){
+},{"../../lib/codemirror":26}],29:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -16993,7 +17092,7 @@ CodeMirror.defineMode("css", function(config, parserConfig) {
   CodeMirror.defineMIME("text/html", "htmlmixed");
 });
 
-},{"../../lib/codemirror":21,"../css/css":23,"../javascript/javascript":25,"../xml/xml":26}],25:[function(require,module,exports){
+},{"../../lib/codemirror":26,"../css/css":28,"../javascript/javascript":30,"../xml/xml":31}],30:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -17738,7 +17837,7 @@ CodeMirror.defineMIME("application/typescript", { name: "javascript", typescript
 
 });
 
-},{"../../lib/codemirror":21}],26:[function(require,module,exports){
+},{"../../lib/codemirror":26}],31:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -18134,498 +18233,7 @@ if (!CodeMirror.mimeModes.hasOwnProperty("text/html"))
 
 });
 
-},{"../../lib/codemirror":21}],27:[function(require,module,exports){
-
-},{}],28:[function(require,module,exports){
-(function (process){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
-  }
-
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
-  }
-
-  return root + dir;
-};
-
-
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-
-exports.extname = function(path) {
-  return splitPath(path)[3];
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-}).call(this,require('_process'))
-},{"_process":29}],29:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-(function () {
-  try {
-    cachedSetTimeout = setTimeout;
-  } catch (e) {
-    cachedSetTimeout = function () {
-      throw new Error('setTimeout is not defined');
-    }
-  }
-  try {
-    cachedClearTimeout = clearTimeout;
-  } catch (e) {
-    cachedClearTimeout = function () {
-      throw new Error('clearTimeout is not defined');
-    }
-  }
-} ())
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = cachedSetTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    cachedClearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        cachedSetTimeout(drainQueue, 0);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],30:[function(require,module,exports){
-var indexOf = require('indexof');
-
-var Object_keys = function (obj) {
-    if (Object.keys) return Object.keys(obj)
-    else {
-        var res = [];
-        for (var key in obj) res.push(key)
-        return res;
-    }
-};
-
-var forEach = function (xs, fn) {
-    if (xs.forEach) return xs.forEach(fn)
-    else for (var i = 0; i < xs.length; i++) {
-        fn(xs[i], i, xs);
-    }
-};
-
-var defineProp = (function() {
-    try {
-        Object.defineProperty({}, '_', {});
-        return function(obj, name, value) {
-            Object.defineProperty(obj, name, {
-                writable: true,
-                enumerable: false,
-                configurable: true,
-                value: value
-            })
-        };
-    } catch(e) {
-        return function(obj, name, value) {
-            obj[name] = value;
-        };
-    }
-}());
-
-var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
-'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
-'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
-'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
-'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
-
-function Context() {}
-Context.prototype = {};
-
-var Script = exports.Script = function NodeScript (code) {
-    if (!(this instanceof Script)) return new Script(code);
-    this.code = code;
-};
-
-Script.prototype.runInContext = function (context) {
-    if (!(context instanceof Context)) {
-        throw new TypeError("needs a 'context' argument.");
-    }
-    
-    var iframe = document.createElement('iframe');
-    if (!iframe.style) iframe.style = {};
-    iframe.style.display = 'none';
-    
-    document.body.appendChild(iframe);
-    
-    var win = iframe.contentWindow;
-    var wEval = win.eval, wExecScript = win.execScript;
-
-    if (!wEval && wExecScript) {
-        // win.eval() magically appears when this is called in IE:
-        wExecScript.call(win, 'null');
-        wEval = win.eval;
-    }
-    
-    forEach(Object_keys(context), function (key) {
-        win[key] = context[key];
-    });
-    forEach(globals, function (key) {
-        if (context[key]) {
-            win[key] = context[key];
-        }
-    });
-    
-    var winKeys = Object_keys(win);
-
-    var res = wEval.call(win, this.code);
-    
-    forEach(Object_keys(win), function (key) {
-        // Avoid copying circular objects like `top` and `window` by only
-        // updating existing context properties or new properties in the `win`
-        // that was only introduced after the eval.
-        if (key in context || indexOf(winKeys, key) === -1) {
-            context[key] = win[key];
-        }
-    });
-
-    forEach(globals, function (key) {
-        if (!(key in context)) {
-            defineProp(context, key, win[key]);
-        }
-    });
-    
-    document.body.removeChild(iframe);
-    
-    return res;
-};
-
-Script.prototype.runInThisContext = function () {
-    return eval(this.code); // maybe...
-};
-
-Script.prototype.runInNewContext = function (context) {
-    var ctx = Script.createContext(context);
-    var res = this.runInContext(ctx);
-
-    forEach(Object_keys(ctx), function (key) {
-        context[key] = ctx[key];
-    });
-
-    return res;
-};
-
-forEach(Object_keys(Script.prototype), function (name) {
-    exports[name] = Script[name] = function (code) {
-        var s = Script(code);
-        return s[name].apply(s, [].slice.call(arguments, 1));
-    };
-});
-
-exports.createScript = function (code) {
-    return exports.Script(code);
-};
-
-exports.createContext = Script.createContext = function (context) {
-    var copy = new Context();
-    if(typeof context === 'object') {
-        forEach(Object_keys(context), function (key) {
-            copy[key] = context[key];
-        });
-    }
-    return copy;
-};
-
-},{"indexof":31}],31:[function(require,module,exports){
+},{"../../lib/codemirror":26}],32:[function(require,module,exports){
 
 var indexOf = [].indexOf;
 
@@ -18636,7 +18244,7 @@ module.exports = function(arr, obj){
   }
   return -1;
 };
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 /*eslint-disable no-unused-vars*/
 /*!
  * jQuery JavaScript Library v3.1.0
@@ -28712,7 +28320,53 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
+//  Inspired by: https://github.com/Marak/colors.js
+
+(function() {
+
+var colors = {
+
+    //  Styles
+    'bold'      : [1,  22],
+    'italic'    : [3,  23],
+    'underline' : [4,  24],
+    'inverse'   : [7,  27],
+
+    //  Dark colors
+    'gray'      : [30, 39],
+    'maroon'    : [31, 39],
+    'green'     : [32, 39],
+    'olive'     : [33, 39],
+    'navy'      : [34, 39],
+    'purple'    : [35, 39],
+    'teal'      : [36, 39],
+    'silver'    : [37, 39],
+
+    //  Bright colors
+    'black'     : [90, 39],
+    'red'       : [91, 39],
+    'lime'      : [92, 39],
+    'yellow'    : [93, 39],
+    'blue'      : [94, 39],
+    'fuchsia'   : [95, 39],
+    'aqua'      : [96, 39],
+    'white'     : [97, 39]
+
+};
+
+for (var color in colors) {
+    String.prototype.__defineGetter__(color, (function (color) {
+        return function() {
+            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
+        }
+    })( colors[color] ));
+}
+
+})();
+
+
+},{}],35:[function(require,module,exports){
 var no = require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -28731,7 +28385,7 @@ module.exports = no;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.array.js":34,"./no.base.js":35,"./no.events.js":36,"./no.jpath.js":37,"./no.object.js":38,"./no.promise.js":40}],34:[function(require,module,exports){
+},{"./no.array.js":36,"./no.base.js":37,"./no.events.js":38,"./no.jpath.js":39,"./no.object.js":40,"./no.promise.js":42}],36:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -28763,7 +28417,7 @@ no.array.map = function(array, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35}],35:[function(require,module,exports){
+},{"./no.base.js":37}],37:[function(require,module,exports){
 (function (process){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  no
@@ -28873,7 +28527,7 @@ if ( no.de ) {
 
 
 }).call(this,require('_process'))
-},{"_process":29}],36:[function(require,module,exports){
+},{"_process":52}],38:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if ( no.de ) {
@@ -29014,7 +28668,7 @@ no.Events.forward = function(name, object) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35}],37:[function(require,module,exports){
+},{"./no.base.js":37}],39:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 require('./no.parser.js');
@@ -30192,7 +29846,7 @@ function compileSetter(jpath) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35,"./no.parser.js":39}],38:[function(require,module,exports){
+},{"./no.base.js":37,"./no.parser.js":41}],40:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -30218,7 +29872,7 @@ no.object.map = function(object, callback) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35}],39:[function(require,module,exports){
+},{"./no.base.js":37}],41:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -30313,7 +29967,7 @@ no.Parser.prototype.error = function(msg) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35}],40:[function(require,module,exports){
+},{"./no.base.js":37}],42:[function(require,module,exports){
 var no = no || require('./no.base.js');
 
 if  ( no.de ) {
@@ -30560,7 +30214,7 @@ no.Promise.rejected = function(result) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./no.base.js":35,"./no.events.js":36}],41:[function(require,module,exports){
+},{"./no.base.js":37,"./no.events.js":38}],43:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  parse-tools
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -30583,7 +30237,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.ast.js":42,"./pt.codegen.js":43,"./pt.factory.js":44,"./pt.grammar.js":45,"./pt.inputstream.js":46,"./pt.js":47,"./pt.parser.js":48}],42:[function(require,module,exports){
+},{"./pt.ast.js":44,"./pt.codegen.js":45,"./pt.factory.js":46,"./pt.grammar.js":47,"./pt.inputstream.js":48,"./pt.js":49,"./pt.parser.js":50}],44:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 //  pt.AST
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -30729,7 +30383,7 @@ pt.AST.prototype.toString = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":47,"no.colors":49}],43:[function(require,module,exports){
+},{"./pt.js":49,"no.colors":34}],45:[function(require,module,exports){
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 var pt = require('./pt.js');
@@ -30967,7 +30621,7 @@ pt.Codegen.prototype._doMacro = function(macro, ast) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":47}],44:[function(require,module,exports){
+},{"./pt.js":49}],46:[function(require,module,exports){
 var pt = require('./pt.js');
 
 var no = require('nommon');
@@ -31064,7 +30718,7 @@ pt.Factory.prototype.get = function(id) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":47,"nommon":50}],45:[function(require,module,exports){
+},{"./pt.js":49,"nommon":35}],47:[function(require,module,exports){
 var pt = require('./pt.js');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -31217,7 +30871,7 @@ pt.Grammar.prototype.makeSkipper = function(id, skipper) {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":47}],46:[function(require,module,exports){
+},{"./pt.js":49}],48:[function(require,module,exports){
 var fs_ = require('fs');
 var path_ = require('path');
 
@@ -31326,7 +30980,7 @@ pt.InputStream.prototype.getPos = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.js":47,"fs":27,"path":28}],47:[function(require,module,exports){
+},{"./pt.js":49,"fs":25,"path":51}],49:[function(require,module,exports){
 var pt = {};
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -31336,7 +30990,7 @@ module.exports = pt;
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{}],48:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 var path_ = require('path');
 
 //  ---------------------------------------------------------------------------------------------------------------  //
@@ -31545,69 +31199,496 @@ pt.Parser.prototype.getState = function() {
 //  ---------------------------------------------------------------------------------------------------------------  //
 
 
-},{"./pt.inputstream.js":46,"./pt.js":47,"path":28}],49:[function(require,module,exports){
-//  Inspired by: https://github.com/Marak/colors.js
+},{"./pt.inputstream.js":48,"./pt.js":49,"path":51}],51:[function(require,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-(function() {
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
 
-var colors = {
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
 
-    //  Styles
-    'bold'      : [1,  22],
-    'italic'    : [3,  23],
-    'underline' : [4,  24],
-    'inverse'   : [7,  27],
-
-    //  Dark colors
-    'gray'      : [30, 39],
-    'maroon'    : [31, 39],
-    'green'     : [32, 39],
-    'olive'     : [33, 39],
-    'navy'      : [34, 39],
-    'purple'    : [35, 39],
-    'teal'      : [36, 39],
-    'silver'    : [37, 39],
-
-    //  Bright colors
-    'black'     : [90, 39],
-    'red'       : [91, 39],
-    'lime'      : [92, 39],
-    'yellow'    : [93, 39],
-    'blue'      : [94, 39],
-    'fuchsia'   : [95, 39],
-    'aqua'      : [96, 39],
-    'white'     : [97, 39]
-
-};
-
-for (var color in colors) {
-    String.prototype.__defineGetter__(color, (function (color) {
-        return function() {
-            return '\033[' + color[0] + 'm' + this + '\033[' + color[1] + 'm';
-        }
-    })( colors[color] ));
+  return parts;
 }
 
-})();
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe =
+    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+var splitPath = function(filename) {
+  return splitPathRe.exec(filename).slice(1);
+};
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
 
 
-},{}],50:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"./no.array.js":51,"./no.base.js":52,"./no.events.js":53,"./no.jpath.js":54,"./no.object.js":55,"./no.promise.js":57,"dup":33}],51:[function(require,module,exports){
-arguments[4][34][0].apply(exports,arguments)
-},{"./no.base.js":52,"dup":34}],52:[function(require,module,exports){
-arguments[4][35][0].apply(exports,arguments)
-},{"_process":29,"dup":35}],53:[function(require,module,exports){
-arguments[4][36][0].apply(exports,arguments)
-},{"./no.base.js":52,"dup":36}],54:[function(require,module,exports){
-arguments[4][37][0].apply(exports,arguments)
-},{"./no.base.js":52,"./no.parser.js":56,"dup":37}],55:[function(require,module,exports){
-arguments[4][38][0].apply(exports,arguments)
-},{"./no.base.js":52,"dup":38}],56:[function(require,module,exports){
-arguments[4][39][0].apply(exports,arguments)
-},{"./no.base.js":52,"dup":39}],57:[function(require,module,exports){
-arguments[4][40][0].apply(exports,arguments)
-},{"./no.base.js":52,"./no.events.js":53,"dup":40}],58:[function(require,module,exports){
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function(path) {
+  var result = splitPath(path),
+      root = result[0],
+      dir = result[1];
+
+  if (!root && !dir) {
+    // No dirname whatsoever
+    return '.';
+  }
+
+  if (dir) {
+    // It has a dirname, strip trailing slash
+    dir = dir.substr(0, dir.length - 1);
+  }
+
+  return root + dir;
+};
+
+
+exports.basename = function(path, ext) {
+  var f = splitPath(path)[2];
+  // TODO: make this comparison case-insensitive on windows?
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+
+exports.extname = function(path) {
+  return splitPath(path)[3];
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":52}],52:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+(function () {
+  try {
+    cachedSetTimeout = setTimeout;
+  } catch (e) {
+    cachedSetTimeout = function () {
+      throw new Error('setTimeout is not defined');
+    }
+  }
+  try {
+    cachedClearTimeout = clearTimeout;
+  } catch (e) {
+    cachedClearTimeout = function () {
+      throw new Error('clearTimeout is not defined');
+    }
+  }
+} ())
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = cachedSetTimeout.call(null, cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    cachedClearTimeout.call(null, timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        cachedSetTimeout.call(null, drainQueue, 0);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],53:[function(require,module,exports){
+var indexOf = require('indexof');
+
+var Object_keys = function (obj) {
+    if (Object.keys) return Object.keys(obj)
+    else {
+        var res = [];
+        for (var key in obj) res.push(key)
+        return res;
+    }
+};
+
+var forEach = function (xs, fn) {
+    if (xs.forEach) return xs.forEach(fn)
+    else for (var i = 0; i < xs.length; i++) {
+        fn(xs[i], i, xs);
+    }
+};
+
+var defineProp = (function() {
+    try {
+        Object.defineProperty({}, '_', {});
+        return function(obj, name, value) {
+            Object.defineProperty(obj, name, {
+                writable: true,
+                enumerable: false,
+                configurable: true,
+                value: value
+            })
+        };
+    } catch(e) {
+        return function(obj, name, value) {
+            obj[name] = value;
+        };
+    }
+}());
+
+var globals = ['Array', 'Boolean', 'Date', 'Error', 'EvalError', 'Function',
+'Infinity', 'JSON', 'Math', 'NaN', 'Number', 'Object', 'RangeError',
+'ReferenceError', 'RegExp', 'String', 'SyntaxError', 'TypeError', 'URIError',
+'decodeURI', 'decodeURIComponent', 'encodeURI', 'encodeURIComponent', 'escape',
+'eval', 'isFinite', 'isNaN', 'parseFloat', 'parseInt', 'undefined', 'unescape'];
+
+function Context() {}
+Context.prototype = {};
+
+var Script = exports.Script = function NodeScript (code) {
+    if (!(this instanceof Script)) return new Script(code);
+    this.code = code;
+};
+
+Script.prototype.runInContext = function (context) {
+    if (!(context instanceof Context)) {
+        throw new TypeError("needs a 'context' argument.");
+    }
+    
+    var iframe = document.createElement('iframe');
+    if (!iframe.style) iframe.style = {};
+    iframe.style.display = 'none';
+    
+    document.body.appendChild(iframe);
+    
+    var win = iframe.contentWindow;
+    var wEval = win.eval, wExecScript = win.execScript;
+
+    if (!wEval && wExecScript) {
+        // win.eval() magically appears when this is called in IE:
+        wExecScript.call(win, 'null');
+        wEval = win.eval;
+    }
+    
+    forEach(Object_keys(context), function (key) {
+        win[key] = context[key];
+    });
+    forEach(globals, function (key) {
+        if (context[key]) {
+            win[key] = context[key];
+        }
+    });
+    
+    var winKeys = Object_keys(win);
+
+    var res = wEval.call(win, this.code);
+    
+    forEach(Object_keys(win), function (key) {
+        // Avoid copying circular objects like `top` and `window` by only
+        // updating existing context properties or new properties in the `win`
+        // that was only introduced after the eval.
+        if (key in context || indexOf(winKeys, key) === -1) {
+            context[key] = win[key];
+        }
+    });
+
+    forEach(globals, function (key) {
+        if (!(key in context)) {
+            defineProp(context, key, win[key]);
+        }
+    });
+    
+    document.body.removeChild(iframe);
+    
+    return res;
+};
+
+Script.prototype.runInThisContext = function () {
+    return eval(this.code); // maybe...
+};
+
+Script.prototype.runInNewContext = function (context) {
+    var ctx = Script.createContext(context);
+    var res = this.runInContext(ctx);
+
+    forEach(Object_keys(ctx), function (key) {
+        context[key] = ctx[key];
+    });
+
+    return res;
+};
+
+forEach(Object_keys(Script.prototype), function (name) {
+    exports[name] = Script[name] = function (code) {
+        var s = Script(code);
+        return s[name].apply(s, [].slice.call(arguments, 1));
+    };
+});
+
+exports.createScript = function (code) {
+    return exports.Script(code);
+};
+
+exports.createContext = Script.createContext = function (context) {
+    var copy = new Context();
+    if(typeof context === 'object') {
+        forEach(Object_keys(context), function (key) {
+            copy[key] = context[key];
+        });
+    }
+    return copy;
+};
+
+},{"indexof":32}],54:[function(require,module,exports){
 module.exports={
   "author": {
     "name": "Sergey Nikitin",
@@ -31667,4 +31748,4 @@ module.exports={
   }
 }
 
-},{}]},{},[4]);
+},{}]},{},[5]);

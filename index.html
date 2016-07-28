@@ -17,35 +17,36 @@
             <div id="left_part" class="col-md-8 full_height">
                 <header>
                     <div class="header_links">
-
-                            <strong id="title">YATE play</strong><span class="remove-spaces">
-                                <a href="https://github.com/f-o-r/yate-playground"><span class="button-link">Github</span></a>
-                                <a href="https://github.com/pasaran/yate/wiki/syntax"><span class="button-link">Documentation</span></a>
-                                <a href="https://github.com/f-o-r/yate-playground/issues"><span class="button-link">Issues</span></a>
-                            </span>
-                            <div class="right_menu_wrapper">
-                                <div class="right_menu">
-                                    <span id="loader_block">
-                                        Sending file...
-                                    </span>
-                                    <div id="copy_block_container">
-                                        <div id="copy_block" class="input-group">
-                                            <input id="paste_input" type="text" class="form-control input-sm"
-                                                   value="here will be your link">
-                                                <a href="" id="open_button_url" target="_blank" class="input-group-addon">
-                                                    <span class="glyphicon glyphicon-play"></span>
-                                                </a>
-                                        </div>
+                        <strong id="title">YATE play</strong><span class="remove-spaces">
+                            <a href="https://github.com/f-o-r/yate-playground"><span class="button-link">Github</span></a>
+                            <a href="https://github.com/pasaran/yate/wiki/syntax"><span class="button-link">Documentation</span></a>
+                            <a href="https://github.com/f-o-r/yate-playground/issues"><span class="button-link">Issues</span></a>
+                        </span>
+                        <div class="right_menu_wrapper">
+                            <div class="right_menu">
+                                <span id="loader_block">
+                                    Sending file...
+                                </span>
+                                <div id="copy_block_container">
+                                    <div id="copy_block" class="input-group">
+                                        <input id="paste_input" type="text" class="form-control input-sm"
+                                               value="here will be your link">
+                                            <a href="" id="open_button_url" target="_blank" class="input-group-addon">
+                                                <span class="glyphicon glyphicon-play"></span>
+                                            </a>
                                     </div>
-                                    <span id="save_button" class="button">Save</span>
-                                    <span id="toggle_edition_mode" data-altText='&nbsp;&nbsp;Editor&nbsp;' class="button">Context</span>
                                 </div>
+                                <span id="save_button" class="button">Save</span>
+                                <span id="button_edition_mode" class="button change-editor-mode-button" data-mode="mode-editor">Editor</span>
+                                <span id="button_context_mode" class="button change-editor-mode-button" data-mode="mode-context">Context</span>
+                                <span id="toggle_styles_mode" class="button change-editor-mode-button" data-mode="mode-styles">Styles</span>
                             </div>
+                        </div>
                     </div>
                 </header>
-
-                <div id="editor_wrap" class="textarea_wrap editor_wrap">
-                    <textarea id="repl_source">
+                <div id="editor" class="mode-editor">
+                    <div id="editor_wrap" class="mode textarea_wrap editor_wrap">
+                        <textarea id="repl_source">
 module "hello"
 
 /*
@@ -53,37 +54,53 @@ module "hello"
 */
 
 match / {
-    <h1>Hello {.person.name}!</h1>
-    
+    <h1>Hello <span class="name">{.person.name}</span>!</h1>
 }
-</textarea>
-                </div>
-                <div id="context_wrap" class="textarea_wrap editor_wrap">
-                <textarea id="context_source">
+                        </textarea>
+                    </div>
+                    <div id="context_wrap" class="mode textarea_wrap editor_wrap">
+                        <textarea id="context_source">
 {
     "person": {
         "name": "World",
         "age": 42
     }
-} 
-</textarea>
+}
+                        </textarea>
+                    </div>
+                    <div id="styles_wrap" class="mode textarea_wrap editor_wrap">
+                        <textarea id="styles_source">
+.name {
+    color: red;
+}
+                        </textarea>
+                    </div>
                 </div>
-
             </div>
             <div id="right_part" class="col-md-4 full_height">
 
                 <div id="right_header">
                     <span id="compile_status" class="invisible">&#9679;</span>
+                    <span id="button_context_mode" class="button change-results-mode-button" data-mode="mode-rendered">Rendered</span>
+                    <span id="button_edition_mode" class="button change-results-mode-button" data-mode="mode-raw">Raw</span>
+                    <span id="toggle_styles_mode" class="button change-results-mode-button" data-mode="mode-compiled">Compiled</span>
 
                     <span class="yate_version_block">
                         yate version: <span id="yate_version"></span>
                     </span>
                 </div>
 
-                <div id="result_wrap" class="textarea_wrap result_wrap">
-                    <textarea id="repl_result"></textarea>
+                <div id="result" class="mode-rendered">
+                    <div id="result_wrap" class="mode textarea_wrap result_wrap">
+                        <textarea id="repl_result"></textarea>
+                    </div>
+                    <div id="rendered_wrap" class="mode textarea_wrap result_wrap">
+                        <div id="repl_rendered_result"></div>
+                    </div>
+                    <div id="compiled_wrap" class="mode textarea_wrap result_wrap">
+                        <textarea id="repl_compiled_result"></textarea>
+                    </div>
                 </div>
-
             </div>
         </div>
         <script src="lib/runtime.js" type="text/javascript"></script>
