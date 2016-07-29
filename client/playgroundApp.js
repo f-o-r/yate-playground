@@ -121,21 +121,6 @@ function toggleMode(event) {
     $('#editor')
         .removeClass()
         .addClass($(event.target).data('mode'));
-    // if (isEditor) {
-    //     $('#editor_wrap').hide();
-    //     $('#context_wrap').show();
-    // } else {
-    //     $('#editor_wrap').show();
-    //     $('#context_wrap').hide();
-    // }
-    //
-    // var altText = this.attr('data-altText');
-    // this.attr('data-altText', this.html());
-    // this.html(altText);
-    //
-    // isEditor = !isEditor;
-    //
-    // return this;
 }
 
 module.exports = toggleMode;
@@ -246,17 +231,28 @@ module.exports = CodeMirror.fromTextArea(textArea, params);
 var $ = require('jquery');
 
 var textArea = $('#repl_rendered_result').get(0);
-var shadowRootAvalible = Boolean(textArea.createShadowRoot);
+var shadowRootAvailable = Boolean(textArea.createShadowRoot);
+var cssScopesAvailable = (function(s) {
+    s.setAttribute('scoped', 'true');
+    return !!s.scoped;
+})(document.createElement('style'));
+var stylesEncapsulationAvailable = shadowRootAvailable || cssScopesAvailable;
 
-if (shadowRootAvalible) {
+var contentNode = document.createElement('div');
+var stylesNode = document.createElement('style');
+
+if (shadowRootAvailable) {
     var shadowRoot = textArea.createShadowRoot();
-    var contentNode = document.createElement('div');
-    var stylesNode = document.createElement('style');
 
     shadowRoot.appendChild(contentNode);
     shadowRoot.appendChild(stylesNode);
+} if (cssScopesAvailable) {
+    stylesNode.setAttribute('scoped', 'true');
+
+    textArea.appendChild(contentNode);
+    textArea.appendChild(stylesNode);
 } else {
-    textArea.innerHTML = 'Preview is not avalible.'
+    textArea.innerHTML = 'Preview is not avalible. Your browser doesn\'t support shadow DOM.'
 }
 
 function setContent(content) {
@@ -268,8 +264,8 @@ function setStyles(styles) {
 }
 
 module.exports = {
-    setContent: shadowRootAvalible ? setContent : function () {},
-    setStyles: shadowRootAvalible ? setStyles : function () {}
+    setContent: stylesEncapsulationAvailable ? setContent : function () {},
+    setStyles: stylesEncapsulationAvailable ? setStyles : function () {}
 };
 
 },{"jquery":33}],10:[function(require,module,exports){
