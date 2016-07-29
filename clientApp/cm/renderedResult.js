@@ -8,7 +8,7 @@ var cssScopesAvailable = (function(s) {
     s.setAttribute('scoped', 'true');
     return !!s.scoped;
 })(document.createElement('style'));
-var stylesEncapsulationAvailable = shadowRootAvalible || cssScopesAvalible;
+var stylesEncapsulationAvailable = shadowRootAvailable || cssScopesAvailable;
 
 var contentNode = document.createElement('div');
 var stylesNode = document.createElement('style');
@@ -24,7 +24,7 @@ if (shadowRootAvailable) {
     textArea.appendChild(contentNode);
     textArea.appendChild(stylesNode);
 } else {
-    textArea.innerHTML = 'Preview is not avalible.'
+    textArea.innerHTML = 'Preview is not avalible. Your browser doesn\'t support shadow DOM.'
 }
 
 function setContent(content) {
