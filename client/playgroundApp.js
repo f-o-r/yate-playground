@@ -247,6 +247,10 @@ var $ = require('jquery');
 
 var textArea = $('#repl_rendered_result').get(0);
 var shadowRootAvalible = Boolean(textArea.createShadowRoot);
+var cssScopesAvalible = (function(s) {
+    s.setAttribute('scoped', 'true');
+    return !!s.scoped;
+})(document.createElement('style'));
 
 if (shadowRootAvalible) {
     var shadowRoot = textArea.createShadowRoot();
@@ -255,6 +259,14 @@ if (shadowRootAvalible) {
 
     shadowRoot.appendChild(contentNode);
     shadowRoot.appendChild(stylesNode);
+} if (cssScopesAvalible) {
+    var contentNode = document.createElement('div');
+    var stylesNode = document.createElement('style');
+
+    stylesNode.setAttribute('scoped', 'true');
+
+    textArea.appendChild(contentNode);
+    textArea.appendChild(stylesNode);
 } else {
     textArea.innerHTML = 'Preview is not avalible.'
 }
@@ -268,8 +280,8 @@ function setStyles(styles) {
 }
 
 module.exports = {
-    setContent: shadowRootAvalible ? setContent : function () {},
-    setStyles: shadowRootAvalible ? setStyles : function () {}
+    setContent: (shadowRootAvalible || cssScopesAvalible) ? setContent : function () {},
+    setStyles: (shadowRootAvalible || cssScopesAvalible) ? setStyles : function () {}
 };
 
 },{"jquery":33}],10:[function(require,module,exports){
