@@ -108,6 +108,12 @@ body {
     cursor: pointer;
 }
 
+.button.button_current {
+    background-color: #2b2b2b;
+    color: #cccccc;
+    border: 1px solid #cccccc;
+}
+
 #toggle_edition_mode {
     margin-left: 15px;
     min-width: 60px;
